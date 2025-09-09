@@ -26,6 +26,7 @@ DROP TRIGGER IF EXISTS trigger_update_dashboard_performance_data ON indicator_va
 DROP FUNCTION IF EXISTS trigger_refresh_dashboard_view();
 DROP FUNCTION IF EXISTS trigger_consolidation_update();
 DROP FUNCTION IF EXISTS update_dashboard_performance_data();
+DROP FUNCTION IF EXISTS manual_trigger_consolidation(text);
 
 -- Create improved consolidation refresh function
 CREATE OR REPLACE FUNCTION refresh_consolidated_data_after_validation()
