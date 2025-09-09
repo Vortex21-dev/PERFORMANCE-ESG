@@ -286,29 +286,34 @@ export const AdminClientPilotage: React.FC = () => {
       setLoading(true);
       
       let query = supabase
-        .from('site_indicator_values_consolidated')
-        .select(`
-          *,
-          enjeux,
-          normes,
-          criteres,
-          sites_count,
-          sites_list
-        `)
+        .from('dashboard_performance_view')
+        .select('*')
         .eq('organization_name', currentOrganization)
         .eq('year', year);
 
       // Apply hierarchy filters based on selected level and entity
-      if (selectedLevel === 'business_line' && selectedEntity) {
-        query = query.eq('business_line_name', selectedEntity);
+      if (selectedLevel === 'organization') {
+        // Show business lines consolidated (business_line_name NOT NULL, subsidiary_name NULL, site_name NULL)
+        query = query
+          .not('business_line_name', 'is', null)
+          .is('subsidiary_name', null)
+          .is('site_name', null);
+      } else if (selectedLevel === 'business_line' && selectedEntity) {
+        // Show subsidiaries within the selected business line (subsidiary_name NOT NULL, site_name NULL)
+        query = query
+          .eq('business_line_name', selectedEntity)
+          .not('subsidiary_name', 'is', null)
+          .is('site_name', null);
       } else if (selectedLevel === 'subsidiary' && selectedEntity) {
-        query = query.eq('subsidiary_name', selectedEntity);
+        // Show sites within the selected subsidiary (site_name NOT NULL)
+        query = query
+          .eq('subsidiary_name', selectedEntity)
+          .not('site_name', 'is', null);
       }
 
       const { data, error } = await query
-        .order('process_code')
-        .order('indicator_code')
-        .order('month');
+        .order('processus')
+        .order('indicateur');
       
       if (error) throw error;
       setConsolidatedIndicators(data || []);
@@ -447,19 +452,19 @@ export const AdminClientPilotage: React.FC = () => {
 
   const filteredConsolidatedIndicators = consolidatedIndicators.filter(indicator => {
     const matchesSearch = !search || 
-      (indicator.indicator_name && indicator.indicator_name.toLowerCase().includes(search.toLowerCase())) ||
+      (indicator.indicateur && indicator.indicateur.toLowerCase().includes(search.toLowerCase())) ||
       indicator.indicator_code.toLowerCase().includes(search.toLowerCase()) ||
-      (indicator.process_name && indicator.process_name.toLowerCase().includes(search.toLowerCase()));
+      (indicator.processus && indicator.processus.toLowerCase().includes(search.toLowerCase()));
     
     const matchesAxe = filters.axe === 'all' || indicator.axe === filters.axe;
-    const matchesProcessus = filters.processus === 'all' || indicator.process_name === filters.processus;
+    const matchesProcessus = filters.processus === 'all' || indicator.processus === filters.processus;
     
     return matchesSearch && matchesAxe && matchesProcessus;
   });
 
   // Get unique values for filters
   const uniqueAxes = [...new Set(consolidatedIndicators.map(row => row.axe))].filter(Boolean);
-  const uniqueProcessus = [...new Set(consolidatedIndicators.map(row => row.process_name))].filter(Boolean);
+  const uniqueProcessus = [...new Set(consolidatedIndicators.map(row => row.processus))].filter(Boolean);
 
   const getPerformanceColor = (performance: number | null) => {
     if (performance === null || performance === undefined) return 'text-gray-500';
@@ -618,7 +623,10 @@ export const AdminClientPilotage: React.FC = () => {
             <div>
               <h2 className="text-2xl font-semibold text-gray-900">Vue Consolidée</h2>
               <p className="text-gray-600">
-                Données consolidées - {selectedEntity || currentOrganization} ({year})
+                {selectedLevel === 'organization' ? 'Filières consolidées' :
+                 selectedLevel === 'business_line' ? `Filiales de ${selectedEntity}` :
+                 selectedLevel === 'subsidiary' ? `Sites de ${selectedEntity}` :
+                 'Données consolidées'} - {currentOrganization} ({year})
               </p>
             </div>
           </div>
@@ -680,7 +688,7 @@ export const AdminClientPilotage: React.FC = () => {
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
-              <option value="organization">Organisation</option>
+              <option value="organization">Organisation (voir filières)</option>
               {businessLines.length > 0 && <option value="business_line">Filière</option>}
               {subsidiaries.length > 0 && <option value="subsidiary">Filiale</option>}
             </select>
@@ -765,10 +773,10 @@ export const AdminClientPilotage: React.FC = () => {
                   { key: 'normes', label: 'Normes' },
                   { key: 'criteres', label: 'Critères' },
                   { key: 'process_code', label: 'Code Processus' },
-                  { key: 'process_name', label: 'Processus' },
+                  { key: 'processus', label: 'Processus' },
                   { key: 'indicator_code', label: 'Code Indicateur' },
-                  { key: 'indicator_name', label: 'Indicateur' },
-                  { key: 'unit', label: 'Unité' },
+                  { key: 'indicateur', label: 'Indicateur' },
+                  { key: 'unite', label: 'Unité' },
                   { key: 'frequence', label: 'Fréquence' },
                   { key: 'type', label: 'Type' },
                   { key: 'formule', label: 'Formule' }
@@ -801,11 +809,11 @@ export const AdminClientPilotage: React.FC = () => {
                 ))}
                 
                 {[
-                  { key: 'target_value', label: 'Cible' },
+                  { key: 'valeur_cible', label: 'Cible' },
                   { key: 'variation', label: 'Variation' },
                   { key: 'performance', label: 'Performance' },
                   { key: 'sites_count', label: 'Nb Sites' },
-                  { key: 'sites_list', label: 'Sites' }
+                  { key: 'sites_list', label: 'Entités' }
                 ].map(({ key, label }) => (
                   <th
                     key={key}
@@ -859,16 +867,16 @@ export const AdminClientPilotage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                       {indicator.process_code}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.process_name}>
-                      <div className="font-medium truncate">{indicator.process_name || '-'}</div>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.processus}>
+                      <div className="font-medium truncate">{indicator.processus || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                       {indicator.indicator_code}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.indicator_name}>
-                      <div className="font-medium truncate">{indicator.indicator_name || indicator.indicator_code}</div>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.indicateur}>
+                      <div className="font-medium truncate">{indicator.indicateur || indicator.indicator_code}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.unit || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.unite || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.frequence || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.type || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -887,25 +895,17 @@ export const AdminClientPilotage: React.FC = () => {
                     {months.map((month) => (
                       <td key={month} className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
                         <span className="font-medium text-blue-600">
-                          {(() => {
-                            // Find the specific month record for this indicator
-                            const monthIndex = months.indexOf(month) + 1; // Convert to 1-based month
-                            const monthRecord = consolidatedIndicators.find(ci => 
-                              ci.process_code === indicator.process_code &&
-                              ci.indicator_code === indicator.indicator_code &&
-                              ci.month === monthIndex
-                            );
-                            return monthRecord && monthRecord.value_consolidated && Number(monthRecord.value_consolidated) > 0 ? 
-                              Number(monthRecord.value_consolidated).toLocaleString() : 
-                              '-';
-                          })()}
+                          {indicator[month as keyof typeof indicator] && Number(indicator[month as keyof typeof indicator]) > 0 ? 
+                            Number(indicator[month as keyof typeof indicator]).toLocaleString() : 
+                            '-'
+                          }
                         </span>
                       </td>
                     ))}
                     
                     {/* Target, Variation, Performance */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
-                      {indicator.target_value ? indicator.target_value.toLocaleString() : '-'}
+                      {indicator.valeur_cible ? indicator.valeur_cible.toLocaleString() : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                       <div className={`flex items-center justify-center gap-1 ${
@@ -929,55 +929,33 @@ export const AdminClientPilotage: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                      {(() => {
-                        // Get sites count for current month
-                        const monthIndex = new Date().getMonth() + 1; // Current month for now
-                        const monthRecord = consolidatedIndicators.find(ci => 
-                          ci.process_code === indicator.process_code &&
-                          ci.indicator_code === indicator.indicator_code &&
-                          ci.month === monthIndex
-                        );
-                        return (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
-                            {monthRecord?.sites_count || indicator.sites_count || 1}
-                          </span>
-                        );
-                      })()}
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
+                        {indicator.sites_count || 1}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {(() => {
-                        // Get sites list for current month
-                        const monthIndex = new Date().getMonth() + 1; // Current month for now
-                        const monthRecord = consolidatedIndicators.find(ci => 
-                          ci.process_code === indicator.process_code &&
-                          ci.indicator_code === indicator.indicator_code &&
-                          ci.month === monthIndex
-                        );
-                        const sitesList = monthRecord?.sites_list || indicator.sites_list;
-                        
-                        return (
-                          <div className="flex flex-wrap gap-1">
-                            {sitesList && sitesList.length > 0 ? (
-                              <>
-                                {sitesList.slice(0, 2).map((site, i) => (
-                                  <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                                    {site}
-                                  </span>
-                                ))}
-                                {sitesList.length > 2 && (
-                                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-                                    +{sitesList.length - 2}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                                {indicator.site_name || 'Site non spécifié'}
+                      <div className="flex flex-wrap gap-1">
+                        {indicator.sites_list && indicator.sites_list.length > 0 ? (
+                          <>
+                            {indicator.sites_list.slice(0, 2).map((entity, i) => (
+                              <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                {entity}
+                              </span>
+                            ))}
+                            {indicator.sites_list.length > 2 && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
+                                +{indicator.sites_list.length - 2}
                               </span>
                             )}
-                          </div>
-                        );
-                      })()}
+                          </>
+                        ) : (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                            {selectedLevel === 'organization' ? indicator.business_line_name :
+                             selectedLevel === 'business_line' ? indicator.subsidiary_name :
+                             indicator.site_name || 'Entité non spécifiée'}
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </motion.tr>
                 ))}
