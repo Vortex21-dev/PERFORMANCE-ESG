@@ -311,6 +311,26 @@ export const AdminClientPilotage: React.FC = () => {
       let filename = '';
 
       if (view === 'sites') {
+        exportData = sitePerformances;
+        filename = `sites_performance_${currentOrganization}_${year}`;
+      } else if (view === 'consolidated') {
+        exportData = consolidatedIndicators;
+        filename = `consolidated_indicators_${currentOrganization}_${year}`;
+      }
+
+      // Create CSV content
+      const headers = Object.keys(exportData[0] || {});
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row => 
+          headers.map(header => 
+            typeof row[header] === 'string' && row[header].includes(',') 
+              ? `"${row[header]}"` 
+              : row[header] || ''
+          ).join(',')
+        )
+      ].join('\n');
+
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -335,6 +355,200 @@ export const AdminClientPilotage: React.FC = () => {
   const handleSort = (key: string) => {
     setSortConfig(prev => ({
       key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Helper functions
+  const getPerformanceColor = (performance?: number) => {
+    if (!performance) return 'text-gray-500';
+    if (performance >= 80) return 'text-green-600';
+    if (performance >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getPerformanceIcon = (performance?: number) => {
+    if (!performance) return <HelpCircle className="h-3 w-3" />;
+    if (performance >= 80) return <CheckCircle className="h-3 w-3" />;
+    if (performance >= 60) return <AlertTriangle className="h-3 w-3" />;
+    return <AlertTriangle className="h-3 w-3" />;
+  };
+
+  // Filter and sort data
+  const uniqueAxes = [...new Set(consolidatedIndicators.map(i => i.axe).filter(Boolean))];
+  
+  const filteredConsolidatedIndicators = consolidatedIndicators
+    .filter(indicator => {
+      const matchesSearch = !search || 
+        indicator.indicator_name?.toLowerCase().includes(search.toLowerCase()) ||
+        indicator.indicator_code?.toLowerCase().includes(search.toLowerCase()) ||
+        indicator.process_name?.toLowerCase().includes(search.toLowerCase());
+      
+      const matchesAxe = filters.axe === 'all' || indicator.axe === filters.axe;
+      
+      return matchesSearch && matchesAxe;
+    })
+    .sort((a, b) => {
+      if (!sortConfig.key) return 0;
+      
+      const aValue = a[sortConfig.key as keyof ConsolidatedIndicator];
+      const bValue = b[sortConfig.key as keyof ConsolidatedIndicator];
+      
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortConfig.direction === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      return 0;
+    });
+
+  const renderOverview = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6"
+    >
+      {/* Organization Header */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-blue-500">
+              <Building2 className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-900">{organization?.name}</h2>
+              <p className="text-gray-600">{organization?.city}, {organization?.country}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  organization?.organization_type === 'simple' ? 'bg-green-100 text-green-800' :
+                  organization?.organization_type === 'with_subsidiaries' ? 'bg-blue-100 text-blue-800' :
+                  'bg-purple-100 text-purple-800'
+                }`}>
+                  {organization?.organization_type === 'simple' ? 'Organisation Simple' :
+                   organization?.organization_type === 'with_subsidiaries' ? 'Avec Filiales' :
+                   'Groupe'}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              Actualiser
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Sites Totaux</p>
+              <p className="text-3xl font-bold text-gray-900">{sites.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-blue-100">
+              <Factory className="h-6 w-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Filières</p>
+              <p className="text-3xl font-bold text-gray-900">{businessLines.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-green-100">
+              <Layers className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Filiales</p>
+              <p className="text-3xl font-bold text-gray-900">{subsidiaries.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-purple-100">
+              <Building className="h-6 w-6 text-purple-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Indicateurs</p>
+              <p className="text-3xl font-bold text-gray-900">{consolidatedIndicators.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-yellow-100">
+              <BarChart3 className="h-6 w-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sites List */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Sites de l'Organisation</h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sites.map((site) => (
+              <motion.div
+                key={site.name}
+                whileHover={{ scale: 1.02 }}
+                className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                onClick={() => handleSiteClick(site.name)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-gray-900">{site.name}</h4>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </div>
+                <div className="space-y-1 text-sm text-gray-600">
+                  {site.city && (
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      <span>{site.city}, {site.country}</span>
+                    </div>
+                  )}
+                  {site.business_line_name && (
+                    <div className="flex items-center gap-1">
+                      <Layers className="h-3 w-3" />
+                      <span>{site.business_line_name}</span>
+                    </div>
+                  )}
+                  {site.subsidiary_name && (
+                    <div className="flex items-center gap-1">
+                      <Building className="h-3 w-3" />
+                      <span>{site.subsidiary_name}</span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
 
   const renderConsolidatedView = () => (
     <motion.div
@@ -688,6 +902,20 @@ export const AdminClientPilotage: React.FC = () => {
       </div>
 
       {/* Consolidation Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+        <div className="flex items-start gap-3">
+          <HelpCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-blue-900 mb-2">À propos de la consolidation</h4>
+            <p className="text-blue-800 text-sm">
+              Les données consolidées agrègent les valeurs de tous les sites selon la formule définie pour chaque indicateur.
+              Les formules disponibles sont : somme, moyenne, minimum et maximum.
+            </p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
 
   if (loading) {
     return (
