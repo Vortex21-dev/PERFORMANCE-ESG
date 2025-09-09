@@ -19,6 +19,7 @@
 
 -- Drop existing function if it exists
 DROP FUNCTION IF EXISTS refresh_consolidated_data_monthly(text);
+DROP FUNCTION update_dashboard_performance_data() first;
 
 -- Create improved consolidation function
 CREATE OR REPLACE FUNCTION refresh_consolidated_data_monthly(p_organization_name text)
