@@ -287,11 +287,6 @@ export const AdminClientPilotage: React.FC = () => {
       console.error('Error refreshing data:', error);
       toast.error('Erreur lors de l\'actualisation des données');
     }
-    try {
-      await supabase.rpc('refresh_consolidation_data');
-    } catch (err) {
-      console.log('No consolidation refresh function available');
-    }
     
     // Refetch current view data
     if (view === 'sites') {
