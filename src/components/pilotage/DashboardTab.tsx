@@ -117,7 +117,7 @@ export const DashboardTab: React.FC = () => {
       
       // Try to refresh the materialized view, but don't fail if it doesn't work
       try {
-        await supabase.rpc('safe_refresh_dashboard_performance_view');
+        await supabase.rpc('refresh_dashboard_performance_view');
       } catch (refreshError) {
         console.warn('Could not refresh materialized view, using existing data:', refreshError);
       }
