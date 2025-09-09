@@ -1085,7 +1085,7 @@ export const DashboardTab: React.FC = () => {
 
         {filteredAndSortedData.length === 0 && (
           <div className="text-center py-12">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          value: `${filteredAndSortedData.length > 0 ? (filteredAndSortedData.reduce((sum, row) => sum + (row.performance || 0), 0) / filteredAndSortedData.length).toFixed(1) : '0.0'}%`,
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {selectedSite ? `Aucune donnée pour le site ${selectedSite}` : 'Aucune donnée trouvée'}
             </h3>
@@ -1114,15 +1114,8 @@ export const DashboardTab: React.FC = () => {
             {['Environnement', 'Social', 'Gouvernance'].map(axe => {
               const axeData = filteredAndSortedData.filter(row => row.axe === axe);
               const avgPerformance = axeData.length > 0 ? 
-                axeData.reduce((sum, row) => sum + (row.performance || 0), 0) / axeData.length : 0;
-              
-              return (
-                <div key={axe} className="text-center">
-                  <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-3 ${
-                    axe === 'Environnement' ? 'bg-green-100' :
-                    axe === 'Social' ? 'bg-blue-100' :
-                    'bg-purple-100'
-                  }`}>
+              <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
                     <span className={`text-2xl ${
                       axe === 'Environnement' ? 'text-green-600' :
                       axe === 'Social' ? 'text-blue-600' :
