@@ -26,7 +26,6 @@
 */
 
 -- Drop existing view and related objects
-DROP VIEW IF EXISTS site_indicator_values_consolidated CASCADE;
 DROP TABLE IF EXISTS site_indicator_values_consolidated CASCADE;
 
 -- Create the new consolidated table with proper structure
