@@ -292,8 +292,16 @@ export const AdminClientPilotage: React.FC = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    
-    // Refresh consolidated data
+    try {
+      // Refresh consolidated data using the correct function name
+      await supabase.rpc('refresh_consolidated_views');
+      await fetchSites();
+      await fetchConsolidatedData();
+      toast.success('Données actualisées');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('Erreur lors de l\'actualisation des données');
+    }
     try {
       await supabase.rpc('refresh_consolidation_data');
     } catch (err) {
@@ -310,7 +318,6 @@ export const AdminClientPilotage: React.FC = () => {
     }
     
     setRefreshing(false);
-    toast.success('Données actualisées');
   };
 
   const handleExport = async (format: 'excel' | 'pdf') => {
