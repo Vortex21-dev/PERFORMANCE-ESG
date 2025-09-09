@@ -334,9 +334,7 @@ export const AdminClientPilotage: React.FC = () => {
     setRefreshing(true);
     try {
       // Refresh consolidated data for current organization
-      await supabase.rpc('refresh_consolidated_data_monthly', { 
-        p_organization_name: currentOrganization 
-      });
+      await supabase.rpc('refresh_dashboard_performance_view');
       await fetchOrganizationData();
       if (view === 'consolidated') {
         await fetchConsolidatedIndicators();
