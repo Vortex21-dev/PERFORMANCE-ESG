@@ -285,8 +285,9 @@ export const AdminClientPilotage: React.FC = () => {
     try {
       setLoading(true);
       
+      // Use the new consolidated view with proper metadata
       let query = supabase
-        .from('dashboard_performance_view')
+        .from('site_indicator_values_consolidated')
         .select('*')
         .eq('organization_name', currentOrganization)
         .eq('year', year);
@@ -312,8 +313,8 @@ export const AdminClientPilotage: React.FC = () => {
       }
 
       const { data, error } = await query
-        .order('processus')
-        .order('indicateur');
+        .order('process_name')
+        .order('indicator_name');
       
       if (error) throw error;
       setConsolidatedIndicators(data || []);
@@ -452,19 +453,19 @@ export const AdminClientPilotage: React.FC = () => {
 
   const filteredConsolidatedIndicators = consolidatedIndicators.filter(indicator => {
     const matchesSearch = !search || 
-      (indicator.indicateur && indicator.indicateur.toLowerCase().includes(search.toLowerCase())) ||
+      (indicator.indicator_name && indicator.indicator_name.toLowerCase().includes(search.toLowerCase())) ||
       indicator.indicator_code.toLowerCase().includes(search.toLowerCase()) ||
-      (indicator.processus && indicator.processus.toLowerCase().includes(search.toLowerCase()));
+      (indicator.process_name && indicator.process_name.toLowerCase().includes(search.toLowerCase()));
     
     const matchesAxe = filters.axe === 'all' || indicator.axe === filters.axe;
-    const matchesProcessus = filters.processus === 'all' || indicator.processus === filters.processus;
+    const matchesProcessus = filters.processus === 'all' || indicator.process_name === filters.processus;
     
     return matchesSearch && matchesAxe && matchesProcessus;
   });
 
   // Get unique values for filters
   const uniqueAxes = [...new Set(consolidatedIndicators.map(row => row.axe))].filter(Boolean);
-  const uniqueProcessus = [...new Set(consolidatedIndicators.map(row => row.processus))].filter(Boolean);
+  const uniqueProcessus = [...new Set(consolidatedIndicators.map(row => row.process_name))].filter(Boolean);
 
   const getPerformanceColor = (performance: number | null) => {
     if (performance === null || performance === undefined) return 'text-gray-500';
@@ -773,10 +774,10 @@ export const AdminClientPilotage: React.FC = () => {
                   { key: 'normes', label: 'Normes' },
                   { key: 'criteres', label: 'Critères' },
                   { key: 'process_code', label: 'Code Processus' },
-                  { key: 'processus', label: 'Processus' },
+                  { key: 'process_name', label: 'Processus' },
                   { key: 'indicator_code', label: 'Code Indicateur' },
-                  { key: 'indicateur', label: 'Indicateur' },
-                  { key: 'unite', label: 'Unité' },
+                  { key: 'indicator_name', label: 'Indicateur' },
+                  { key: 'unit', label: 'Unité' },
                   { key: 'frequence', label: 'Fréquence' },
                   { key: 'type', label: 'Type' },
                   { key: 'formule', label: 'Formule' }
@@ -867,16 +868,16 @@ export const AdminClientPilotage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                       {indicator.process_code}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.processus}>
-                      <div className="font-medium truncate">{indicator.processus || '-'}</div>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.process_name}>
+                      <div className="font-medium truncate">{indicator.process_name || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                       {indicator.indicator_code}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.indicateur}>
-                      <div className="font-medium truncate">{indicator.indicateur || indicator.indicator_code}</div>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs" title={indicator.indicator_name}>
+                      <div className="font-medium truncate">{indicator.indicator_name || indicator.indicator_code}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.unite || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.unit || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.frequence || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{indicator.type || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -895,8 +896,8 @@ export const AdminClientPilotage: React.FC = () => {
                     {months.map((month) => (
                       <td key={month} className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
                         <span className="font-medium text-blue-600">
-                          {indicator[month as keyof typeof indicator] && Number(indicator[month as keyof typeof indicator]) > 0 ? 
-                            Number(indicator[month as keyof typeof indicator]).toLocaleString() : 
+                          {indicator[month as keyof ConsolidatedIndicator] && Number(indicator[month as keyof ConsolidatedIndicator]) > 0 ? 
+                            Number(indicator[month as keyof ConsolidatedIndicator]).toLocaleString() : 
                             '-'
                           }
                         </span>
