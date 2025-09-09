@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-type ViewType = 'overview' | 'business-lines' | 'subsidiaries' | 'sites' | 'consolidated';
+type ViewType = 'overview' | 'consolidated';
 
 interface Organization {
   name: string;
@@ -58,30 +58,32 @@ interface BusinessLine {
 
 interface Subsidiary {
   name: string;
-  business_line_name?: string;
   organization_name: string;
-  address?: string;
-  city?: string;
-  country?: string;
-  phone?: string;
-  email?: string;
-  website?: string;
+  business_line_name?: string;
   description?: string;
+  address: string;
+  city: string;
+  country: string;
+  phone: string;
+  email: string;
+  website?: string;
   created_at: string;
   updated_at: string;
 }
 
 interface Site {
   name: string;
-  subsidiary_name?: string;
-  business_line_name?: string;
   organization_name: string;
-  address?: string;
-  city?: string;
-  country?: string;
-  phone?: string;
-  email?: string;
+  business_line_name?: string;
+  subsidiary_name?: string;
   description?: string;
+  address: string;
+  city: string;
+  country: string;
+  phone: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface SitePerformanceSummary {
@@ -144,10 +146,7 @@ export const AdminClientPilotage: React.FC = () => {
   
   // Data states
   const [organization, setOrganization] = useState<Organization | null>(null);
-  const [businessLines, setBusinessLines] = useState<BusinessLine[]>([]);
-  const [subsidiaries, setSubsidiaries] = useState<Subsidiary[]>([]);
-  const [sites, setSites] = useState<Site[]>([]);
-  const [sitePerformances, setSitePerformances] = useState<SitePerformanceSummary[]>([]);
+  const [sitePerformances, setSitePerformances] = useState<SitePerformance[]>([]);
   const [consolidatedIndicators, setConsolidatedIndicators] = useState<ConsolidatedIndicator[]>([]);
   
   // Filters
@@ -183,12 +182,10 @@ export const AdminClientPilotage: React.FC = () => {
   }, [currentOrganization]);
 
   useEffect(() => {
-    if (view === 'sites' && organization) {
-      fetchSitePerformances();
-    } else if (view === 'consolidated' && organization) {
+    if (view === 'consolidated' && organization) {
       fetchConsolidatedIndicators();
     }
-  }, [view, organization, year, selectedLevel, selectedEntity]);
+  }, [view, organization, year]);
 
   const fetchOrganizationData = async () => {
     try {
@@ -203,38 +200,6 @@ export const AdminClientPilotage: React.FC = () => {
       
       if (orgError) throw orgError;
       setOrganization(orgData);
-
-      // Fetch business lines
-      const { data: businessLinesData, error: blError } = await supabase
-        .from('business_lines')
-        .select('*')
-        .eq('organization_name', currentOrganization)
-        .order('name');
-      
-      if (blError) throw blError;
-      setBusinessLines(businessLinesData || []);
-
-      // Fetch subsidiaries
-      const { data: subsidiariesData, error: subError } = await supabase
-        .from('subsidiaries')
-        .select('*')
-        .eq('organization_name', currentOrganization)
-        .order('name');
-      
-      if (subError) throw subError;
-      setSubsidiaries(subsidiariesData || []);
-
-      // Fetch all sites
-      const { data: sitesData, error: sitesError } = await supabase
-        .from('sites')
-        .select('*')
-        .eq('organization_name', currentOrganization)
-        .order('name');
-      
-      if (sitesError) throw sitesError;
-      setSites(sitesData || []);
-
-      console.log('Sites fetched:', sitesData);
       
     } catch (err: any) {
       console.error('Error fetching organization data:', err);
@@ -315,9 +280,7 @@ export const AdminClientPilotage: React.FC = () => {
     }
     
     // Refetch current view data
-    if (view === 'sites') {
-      await fetchSitePerformances();
-    } else if (view === 'consolidated') {
+    if (view === 'consolidated') {
       await fetchConsolidatedIndicators();
     } else {
       await fetchOrganizationData();
@@ -331,22 +294,7 @@ export const AdminClientPilotage: React.FC = () => {
       let exportData: any[] = [];
       let filename = '';
 
-      if (view === 'sites') {
-        exportData = filteredSitePerformances.map(site => ({
-          'Site': site.site_name,
-          'Filière': site.business_line_name || '-',
-          'Filiale': site.subsidiary_name || '-',
-          'Ville': site.city || '-',
-          'Pays': site.country || '-',
-          'Indicateurs Total': site.total_indicators,
-          'Indicateurs Remplis': site.filled_indicators,
-          'Taux Completion (%)': site.completion_rate,
-          'Performance Moyenne (%)': site.avg_performance,
-          'Processus Actifs': site.active_processes,
-          'Dernière MAJ': new Date(site.last_updated).toLocaleDateString('fr-FR')
-        }));
-        filename = `sites_performance_${currentOrganization}_${year}`;
-      } else if (view === 'consolidated') {
+      if (view === 'consolidated') {
         exportData = filteredConsolidatedIndicators.map(indicator => ({
           'Niveau': selectedLevel === 'organization' ? 'Organisation' : 
                    selectedLevel === 'business_line' ? 'Filière' : 'Filiale',
@@ -531,24 +479,24 @@ export const AdminClientPilotage: React.FC = () => {
         {[
           {
             title: 'Filières',
-            value: businessLines.length,
+            value: 0,
             icon: Layers,
             color: 'bg-blue-500',
-            description: 'Lignes d\'affaires'
+            change: 'Stable'
           },
           {
             title: 'Filiales',
-            value: subsidiaries.length,
+            value: 0,
             icon: Building,
             color: 'bg-purple-500',
-            description: 'Entités juridiques'
+            change: 'Stable'
           },
           {
             title: 'Sites',
-            value: sites.length,
+            value: 0,
             icon: Factory,
-            color: 'bg-green-500',
-            description: 'Localisations physiques'
+            color: 'bg-amber-500',
+            change: 'Stable'
           },
           {
             title: 'Performance Moyenne',
@@ -580,438 +528,23 @@ export const AdminClientPilotage: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {organization?.organization_type === 'group' && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            onClick={() => setView('business-lines')}
-            className="bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl p-8 text-white cursor-pointer hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold mb-2">Filières d'Affaires</h3>
-                <p className="text-blue-100">Gérez vos lignes d'affaires</p>
-              </div>
-              <Layers className="h-12 w-12 text-blue-200" />
-            </div>
-          </motion.div>
-        )}
-
-        {(organization?.organization_type === 'with_subsidiaries' || organization?.organization_type === 'group') && (
-          <motion.div
-            initial={{ opacity: 0, x: 0 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4 }}
-            onClick={() => setView('subsidiaries')}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl p-8 text-white cursor-pointer hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold mb-2">Filiales</h3>
-                <p className="text-purple-100">Visualisez vos entités juridiques</p>
-              </div>
-              <Building className="h-12 w-12 text-purple-200" />
-            </div>
-          </motion.div>
-        )}
-
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
-          onClick={() => setView('sites')}
+          transition={{ delay: 0.3 }}
+          onClick={() => setView('consolidated')}
           className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl p-8 text-white cursor-pointer hover:shadow-lg transition-all"
         >
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-xl font-bold mb-2">Sites</h3>
-              <p className="text-green-100">Accédez aux tableaux de bord des sites</p>
-            </div>
-            <Factory className="h-12 w-12 text-green-200" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.6 }}
-          onClick={() => {
-            setSelectedLevel('organization');
-            setSelectedEntity(null);
-            setView('consolidated');
-          }}
-          className="bg-gradient-to-r from-indigo-500 to-blue-500 rounded-xl p-8 text-white cursor-pointer hover:shadow-lg transition-all"
-        >
-          <div className="flex items-center justify-between">
-            <div>
               <h3 className="text-xl font-bold mb-2">Vue Consolidée</h3>
-              <p className="text-indigo-100">Analyse consolidée globale</p>
+              <p className="text-green-100">Analyse consolidée de tous les indicateurs</p>
             </div>
-            <Globe className="h-12 w-12 text-indigo-200" />
+            <Globe className="h-12 w-12 text-green-200" />
           </div>
         </motion.div>
       </div>
-    </motion.div>
-  );
-
-  const renderBusinessLinesView = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-blue-500">
-              <Layers className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Filières d'Affaires</h2>
-              <p className="text-gray-600">Lignes d'affaires de votre organisation</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Actualiser
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <input
-            type="text"
-            placeholder="Rechercher une filière..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-      </div>
-
-      {/* Business Lines Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBusinessLines.map((businessLine, index) => (
-          <motion.div
-            key={businessLine.name}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-all"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100">
-                  <Layers className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{businessLine.name}</h3>
-                  <p className="text-sm text-gray-600">{businessLine.description || 'Filière d\'affaires'}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Filiales</span>
-                <span className="font-semibold text-gray-900">
-                  {subsidiaries.filter(sub => sub.business_line_name === businessLine.name).length}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Sites</span>
-                <span className="font-semibold text-gray-900">
-                  {sites.filter(site => site.business_line_name === businessLine.name).length}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEntityClick('business_line', businessLine.name);
-                }}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-              >
-                Vue Consolidée
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {filteredBusinessLines.length === 0 && (
-        <div className="text-center py-12">
-          <Layers className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune filière trouvée</h3>
-          <p className="text-gray-500">
-            {search ? 
-              "Aucune filière ne correspond à votre recherche." :
-              "Cette organisation n'a pas de filières configurées."
-            }
-          </p>
-        </div>
-      )}
-    </motion.div>
-  );
-
-  const renderSubsidiariesView = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-purple-500">
-              <Building className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Filiales</h2>
-              <p className="text-gray-600">Entités juridiques de votre organisation</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Actualiser
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <input
-            type="text"
-            placeholder="Rechercher une filiale..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-          />
-        </div>
-      </div>
-
-      {/* Subsidiaries Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSubsidiaries.map((subsidiary, index) => (
-          <motion.div
-            key={subsidiary.name}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-all"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-100">
-                  <Building className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{subsidiary.name}</h3>
-                  <p className="text-sm text-gray-600">{subsidiary.city}, {subsidiary.country}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {subsidiary.business_line_name && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Filière</span>
-                  <span className="font-semibold text-gray-900">{subsidiary.business_line_name}</span>
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Sites</span>
-                <span className="font-semibold text-gray-900">
-                  {sites.filter(site => site.subsidiary_name === subsidiary.name).length}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEntityClick('subsidiary', subsidiary.name);
-                }}
-                className="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
-              >
-                Vue Consolidée
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {filteredSubsidiaries.length === 0 && (
-        <div className="text-center py-12">
-          <Building className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune filiale trouvée</h3>
-          <p className="text-gray-500">
-            {search ? 
-              "Aucune filiale ne correspond à votre recherche." :
-              "Cette organisation n'a pas de filiales configurées."
-            }
-          </p>
-        </div>
-      )}
-    </motion.div>
-  );
-
-  const renderSitesView = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-green-500">
-              <Factory className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Sites</h2>
-              <p className="text-gray-600">Localisations physiques de votre organisation</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Actualiser
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <input
-            type="text"
-            placeholder="Rechercher un site..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-          />
-        </div>
-      </div>
-
-      {/* Sites Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSitePerformances.map((site, index) => (
-          <motion.div
-            key={site.site_name}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            onClick={() => handleSiteClick(site.site_name)}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-all"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-100">
-                  <Factory className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{site.site_name}</h3>
-                  <p className="text-sm text-gray-600">{site.city}, {site.country}</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-gray-400" />
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Completion</span>
-                <span className={`font-semibold ${getCompletionColor(site.completion_rate)}`}>
-                  {site.completion_rate !== null && site.completion_rate !== undefined && Number.isFinite(site.completion_rate) ? site.completion_rate.toFixed(1) : '0.0'}%
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Performance</span>
-                <div className={`flex items-center gap-1 ${getPerformanceColor(site.avg_performance)}`}>
-                  {getPerformanceIcon(site.avg_performance)}
-                  <span className="font-semibold">
-                    {site.avg_performance !== null && site.avg_performance !== undefined && Number.isFinite(site.avg_performance) ? `${site.avg_performance.toFixed(1)}%` : '-'}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Indicateurs</span>
-                <span className="font-semibold text-gray-900">
-                  {site.filled_indicators}/{site.total_indicators}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Processus</span>
-                <span className="font-semibold text-gray-900">{site.active_processes}</span>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="mt-4">
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>Progression</span>
-                <span>{site.completion_rate !== null && site.completion_rate !== undefined && Number.isFinite(site.completion_rate) ? site.completion_rate.toFixed(0) : '0'}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    (site.completion_rate && Number.isFinite(site.completion_rate) ? site.completion_rate : 0) >= 90 ? 'bg-green-500' :
-                    (site.completion_rate && Number.isFinite(site.completion_rate) ? site.completion_rate : 0) >= 70 ? 'bg-yellow-500' :
-                    'bg-red-500'
-                  }`}
-                  style={{ width: `${site.completion_rate && Number.isFinite(site.completion_rate) ? site.completion_rate : 0}%` }}
-                />
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {filteredSitePerformances.length === 0 && (
-        <div className="text-center py-12">
-          <Factory className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun site trouvé</h3>
-          <p className="text-gray-500">
-            {search ? 
-              "Aucun site ne correspond à votre recherche." :
-              "Cette organisation n'a pas de sites configurés."
-            }
-          </p>
-        </div>
-      )}
     </motion.div>
   );
 
@@ -1431,49 +964,8 @@ export const AdminClientPilotage: React.FC = () => {
                 <Home className="w-4 h-4" />
                 <span>Vue d'ensemble</span>
               </button>
-              {organization?.organization_type === 'group' && (
-                <button
-                  onClick={() => setView('business-lines')}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                    view === 'business-lines' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Filières</span>
-                </button>
-              )}
-              {(organization?.organization_type === 'with_subsidiaries' || organization?.organization_type === 'group') && (
-                <button
-                  onClick={() => setView('subsidiaries')}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                    view === 'subsidiaries' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <Building className="w-4 h-4" />
-                  <span>Filiales</span>
-                </button>
-              )}
               <button
-                onClick={() => setView('sites')}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                  view === 'sites' 
-                    ? 'bg-white text-gray-900 shadow-sm' 
-                    : 'text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <Factory className="w-4 h-4" />
-                <span>Sites</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedLevel('organization');
-                  setSelectedEntity(null);
-                  setView('consolidated');
-                }}
+                onClick={() => setView('consolidated')}
                 className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
                   view === 'consolidated' 
                     ? 'bg-white text-gray-900 shadow-sm' 
@@ -1497,9 +989,6 @@ export const AdminClientPilotage: React.FC = () => {
             transition={{ duration: 0.2 }}
           >
             {view === 'overview' && renderOverview()}
-            {view === 'business-lines' && renderBusinessLinesView()}
-            {view === 'subsidiaries' && renderSubsidiariesView()}
-            {view === 'sites' && renderSitesView()}
             {view === 'consolidated' && renderConsolidatedView()}
           </motion.div>
         </AnimatePresence>
