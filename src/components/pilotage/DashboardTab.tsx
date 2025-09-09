@@ -761,8 +761,15 @@ export const DashboardTab: React.FC = () => {
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Tableau de Bord Performance</h2>
-              <p className="text-gray-600">Vue d'ensemble des indicateurs ESG - {currentOrganization}</p>
+              <h2 className="text-2xl font-semibold text-gray-900">
+                {selectedSite ? `Tableau de Bord - Site ${selectedSite}` : 'Tableau de Bord Performance'}
+              </h2>
+              <p className="text-gray-600">
+                {selectedSite 
+                  ? `Indicateurs ESG du site ${selectedSite}` 
+                  : `Vue d'ensemble des indicateurs ESG - ${currentOrganization}`
+                }
+              </p>
             </div>
           </div>
           
@@ -869,7 +876,7 @@ export const DashboardTab: React.FC = () => {
           },
           {
             title: 'Performance Moyenne',
-            value: `${(filteredAndSortedData.reduce((sum, row) => sum + (row.performance || 0), 0) / filteredAndSortedData.length || 0).toFixed(1)}%`,
+            value: `${filteredAndSortedData.length > 0 ? (filteredAndSortedData.reduce((sum, row) => sum + (row.performance || 0), 0) / filteredAndSortedData.length).toFixed(1) : '0.0'}%`,
             icon: Target,
             color: 'bg-green-500'
           },
@@ -898,15 +905,8 @@ export const DashboardTab: React.FC = () => {
                 <stat.icon className="h-6 w-6 text-white" />
               </div>
               <div className="ml-4">
-                <h2 className="text-2xl font-semibold text-gray-900">
-                  {selectedSite ? `Tableau de Bord - Site ${selectedSite}` : 'Tableau de Bord Performance'}
-                </h2>
-                <p className="text-gray-600">
-                  {selectedSite 
-                    ? `Indicateurs ESG du site ${selectedSite}` 
-                    : `Vue d'ensemble des indicateurs ESG - ${currentOrganization}`
-                  }
-                </p>
+                <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
               </div>
             </div>
           </motion.div>
@@ -1085,7 +1085,6 @@ export const DashboardTab: React.FC = () => {
 
         {filteredAndSortedData.length === 0 && (
           <div className="text-center py-12">
-          value: `${filteredAndSortedData.length > 0 ? (filteredAndSortedData.reduce((sum, row) => sum + (row.performance || 0), 0) / filteredAndSortedData.length).toFixed(1) : '0.0'}%`,
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {selectedSite ? `Aucune donnée pour le site ${selectedSite}` : 'Aucune donnée trouvée'}
             </h3>
@@ -1114,8 +1113,11 @@ export const DashboardTab: React.FC = () => {
             {['Environnement', 'Social', 'Gouvernance'].map(axe => {
               const axeData = filteredAndSortedData.filter(row => row.axe === axe);
               const avgPerformance = axeData.length > 0 ? 
-              <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                (axeData.reduce((sum, row) => sum + (row.performance || 0), 0) / axeData.length) : 0;
+              
+              return (
+                <div key={axe} className="text-center">
+                  <div className="flex items-center justify-center mb-2">
                     <span className={`text-2xl ${
                       axe === 'Environnement' ? 'text-green-600' :
                       axe === 'Social' ? 'text-blue-600' :
