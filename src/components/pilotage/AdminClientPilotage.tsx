@@ -134,6 +134,19 @@ interface ConsolidatedIndicator {
   variation?: number;
   performance?: number;
   last_updated?: string;
+  // Monthly values for proper display
+  janvier?: number;
+  fevrier?: number;
+  mars?: number;
+  avril?: number;
+  mai?: number;
+  juin?: number;
+  juillet?: number;
+  aout?: number;
+  septembre?: number;
+  octobre?: number;
+  novembre?: number;
+  decembre?: number;
 }
 
 export const AdminClientPilotage: React.FC = () => {
@@ -873,10 +886,14 @@ export const AdminClientPilotage: React.FC = () => {
                     {months.map((month) => (
                       <td key={month} className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
                         <span className="font-medium text-blue-600">
-                          {indicator.value_consolidated ? 
-                            Number(indicator.value_consolidated).toLocaleString() : 
-                            '-'
-                          }
+                          {(() => {
+                            // Get the month-specific value from the consolidated data
+                            const monthIndex = months.indexOf(month);
+                            const monthValue = indicator[months[monthIndex] as keyof ConsolidatedIndicator];
+                            return monthValue && Number(monthValue) > 0 ? 
+                              Number(monthValue).toLocaleString() : 
+                              '-';
+                          })()}
                         </span>
                       </td>
                     ))}
@@ -908,19 +925,27 @@ export const AdminClientPilotage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
-                        {indicator.sites_count || 0}
+                        {indicator.sites_count || 1}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       <div className="flex flex-wrap gap-1">
-                        {indicator.sites_list?.slice(0, 2).map((site, i) => (
-                          <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                            {site}
-                          </span>
-                        ))}
-                        {indicator.sites_list && indicator.sites_list.length > 2 && (
-                          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-                            +{indicator.sites_list.length - 2}
+                        {indicator.sites_list && indicator.sites_list.length > 0 ? (
+                          <>
+                            {indicator.sites_list.slice(0, 2).map((site, i) => (
+                              <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                {site}
+                              </span>
+                            ))}
+                            {indicator.sites_list.length > 2 && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
+                                +{indicator.sites_list.length - 2}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                            {indicator.site_name || 'Site non spécifié'}
                           </span>
                         )}
                       </div>
