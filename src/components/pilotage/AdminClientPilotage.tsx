@@ -555,8 +555,8 @@ export const AdminClientPilotage: React.FC = () => {
           {
             title: 'Performance Moyenne',
             value: `${sitePerformances.length > 0 ? (sitePerformances.reduce((sum, site) => sum + (site.avg_performance || 0), 0) / sitePerformances.length).toFixed(1) : '0.0'}%`,
-            icon: BarChart3,
-            color: 'bg-amber-500',
+            icon: TrendingUp,
+            color: 'bg-green-500',
             description: 'Tous sites confondus'
           }
         ].map((stat, index) => (
