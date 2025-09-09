@@ -62,7 +62,7 @@ export function useDashboardHealth(): UseDashboardHealthReturn {
       
       // Force refresh the materialized view
       const { error: refreshError } = await supabase
-        .rpc('refresh_dashboard_performance_view');
+        .rpc('safe_refresh_dashboard_performance_view');
 
       if (refreshError) {
         console.warn('Refresh failed:', refreshError);
