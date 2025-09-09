@@ -33,9 +33,11 @@ import {
   RefreshCw,
   Eye,
   Users,
-  Settings
+  Settings,
+  Wrench
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConsolidationDiagnosticsModal } from '../ui/ConsolidationDiagnosticsModal';
 
 type ViewType = 'overview' | 'consolidated';
 
@@ -168,6 +170,9 @@ export const AdminClientPilotage: React.FC = () => {
     key: string | null;
     direction: 'asc' | 'desc';
   }>({ key: null, direction: 'asc' });
+  
+  // Diagnostic modal state
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
   const currentYear = new Date().getFullYear();
@@ -614,6 +619,13 @@ export const AdminClientPilotage: React.FC = () => {
               Actualiser
             </button>
             <button
+              onClick={() => setShowDiagnostics(true)}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              Diagnostic
+            </button>
+            <button
               onClick={() => handleExport('excel')}
               className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
@@ -1028,6 +1040,19 @@ export const AdminClientPilotage: React.FC = () => {
           </motion.div>
         </AnimatePresence>
       </div>
+      
+      {/* Consolidation Diagnostics Modal */}
+      <ConsolidationDiagnosticsModal
+        isOpen={showDiagnostics}
+        onClose={() => setShowDiagnostics(false)}
+        organizationName={currentOrganization || ''}
+        onFixComplete={() => {
+          fetchOrganizationData();
+          if (view === 'consolidated') {
+            fetchConsolidatedIndicators();
+          }
+        }}
+      />
     </div>
   );
 };
