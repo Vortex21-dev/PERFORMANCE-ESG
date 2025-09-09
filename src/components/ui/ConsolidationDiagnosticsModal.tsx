@@ -17,7 +17,7 @@ import {
   validateConsolidationWorking,
   ConsolidationDiagnostic,
   SiteDataDiagnostic
-} from '../utils/consolidationDiagnostics';
+} from '../../utils/consolidationDiagnostics';
 import toast from 'react-hot-toast';
 
 interface ConsolidationDiagnosticsModalProps {
