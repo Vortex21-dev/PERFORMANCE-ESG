@@ -287,7 +287,14 @@ export const AdminClientPilotage: React.FC = () => {
       
       let query = supabase
         .from('site_indicator_values_consolidated')
-        .select('*')
+        .select(`
+          *,
+          enjeux,
+          normes,
+          criteres,
+          sites_count,
+          sites_list
+        `)
         .eq('organization_name', currentOrganization)
         .eq('year', year);
 
@@ -298,7 +305,10 @@ export const AdminClientPilotage: React.FC = () => {
         query = query.eq('subsidiary_name', selectedEntity);
       }
 
-      const { data, error } = await query.order('indicator_code');
+      const { data, error } = await query
+        .order('process_code')
+        .order('indicator_code')
+        .order('month');
       
       if (error) throw error;
       setConsolidatedIndicators(data || []);
@@ -317,28 +327,19 @@ export const AdminClientPilotage: React.FC = () => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Refresh consolidated data using the correct function name
-      await supabase.rpc('refresh_consolidated_views');
+      // Refresh consolidated data for current organization
+      await supabase.rpc('refresh_consolidated_data_monthly', { 
+        p_organization_name: currentOrganization 
+      });
       await fetchOrganizationData();
-      await fetchConsolidatedData();
+      if (view === 'consolidated') {
+        await fetchConsolidatedIndicators();
+      }
       toast.success('Données actualisées');
     } catch (error) {
       console.error('Error refreshing data:', error);
       toast.error('Erreur lors de l\'actualisation des données');
     }
-    try {
-      await supabase.rpc('refresh_consolidation_data');
-    } catch (err) {
-      console.log('No consolidation refresh function available');
-    }
-    
-    // Refetch current view data
-    if (view === 'consolidated') {
-      await fetchConsolidatedIndicators();
-    } else {
-      await fetchOrganizationData();
-    }
-    
     setRefreshing(false);
   };
 
@@ -887,11 +888,15 @@ export const AdminClientPilotage: React.FC = () => {
                       <td key={month} className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
                         <span className="font-medium text-blue-600">
                           {(() => {
-                            // Get the month-specific value from the consolidated data
-                            const monthIndex = months.indexOf(month);
-                            const monthValue = indicator[months[monthIndex] as keyof ConsolidatedIndicator];
-                            return monthValue && Number(monthValue) > 0 ? 
-                              Number(monthValue).toLocaleString() : 
+                            // Find the specific month record for this indicator
+                            const monthIndex = months.indexOf(month) + 1; // Convert to 1-based month
+                            const monthRecord = consolidatedIndicators.find(ci => 
+                              ci.process_code === indicator.process_code &&
+                              ci.indicator_code === indicator.indicator_code &&
+                              ci.month === monthIndex
+                            );
+                            return monthRecord && monthRecord.value_consolidated && Number(monthRecord.value_consolidated) > 0 ? 
+                              Number(monthRecord.value_consolidated).toLocaleString() : 
                               '-';
                           })()}
                         </span>
@@ -924,31 +929,55 @@ export const AdminClientPilotage: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
-                        {indicator.sites_count || 1}
-                      </span>
+                      {(() => {
+                        // Get sites count for current month
+                        const monthIndex = new Date().getMonth() + 1; // Current month for now
+                        const monthRecord = consolidatedIndicators.find(ci => 
+                          ci.process_code === indicator.process_code &&
+                          ci.indicator_code === indicator.indicator_code &&
+                          ci.month === monthIndex
+                        );
+                        return (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
+                            {monthRecord?.sites_count || indicator.sites_count || 1}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      <div className="flex flex-wrap gap-1">
-                        {indicator.sites_list && indicator.sites_list.length > 0 ? (
-                          <>
-                            {indicator.sites_list.slice(0, 2).map((site, i) => (
-                              <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                                {site}
-                              </span>
-                            ))}
-                            {indicator.sites_list.length > 2 && (
-                              <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-                                +{indicator.sites_list.length - 2}
+                      {(() => {
+                        // Get sites list for current month
+                        const monthIndex = new Date().getMonth() + 1; // Current month for now
+                        const monthRecord = consolidatedIndicators.find(ci => 
+                          ci.process_code === indicator.process_code &&
+                          ci.indicator_code === indicator.indicator_code &&
+                          ci.month === monthIndex
+                        );
+                        const sitesList = monthRecord?.sites_list || indicator.sites_list;
+                        
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {sitesList && sitesList.length > 0 ? (
+                              <>
+                                {sitesList.slice(0, 2).map((site, i) => (
+                                  <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                    {site}
+                                  </span>
+                                ))}
+                                {sitesList.length > 2 && (
+                                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
+                                    +{sitesList.length - 2}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                                {indicator.site_name || 'Site non spécifié'}
                               </span>
                             )}
-                          </>
-                        ) : (
-                          <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                            {indicator.site_name || 'Site non spécifié'}
-                          </span>
-                        )}
-                      </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                   </motion.tr>
                 ))}
