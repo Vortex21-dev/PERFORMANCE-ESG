@@ -149,6 +149,11 @@ export const AdminClientPilotage: React.FC = () => {
   const [sitePerformances, setSitePerformances] = useState<SitePerformance[]>([]);
   const [consolidatedIndicators, setConsolidatedIndicators] = useState<ConsolidatedIndicator[]>([]);
   
+  // Missing state variables
+  const [businessLines, setBusinessLines] = useState<BusinessLine[]>([]);
+  const [subsidiaries, setSubsidiaries] = useState<Subsidiary[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
+  
   // Filters
   const [filters, setFilters] = useState({
     axe: 'all',
@@ -200,6 +205,36 @@ export const AdminClientPilotage: React.FC = () => {
       
       if (orgError) throw orgError;
       setOrganization(orgData);
+      
+      // Fetch business lines
+      const { data: businessLinesData, error: businessLinesError } = await supabase
+        .from('business_lines')
+        .select('*')
+        .eq('organization_name', currentOrganization)
+        .order('name');
+      
+      if (businessLinesError) throw businessLinesError;
+      setBusinessLines(businessLinesData || []);
+      
+      // Fetch subsidiaries
+      const { data: subsidiariesData, error: subsidiariesError } = await supabase
+        .from('subsidiaries')
+        .select('*')
+        .eq('organization_name', currentOrganization)
+        .order('name');
+      
+      if (subsidiariesError) throw subsidiariesError;
+      setSubsidiaries(subsidiariesData || []);
+      
+      // Fetch sites
+      const { data: sitesData, error: sitesError } = await supabase
+        .from('sites')
+        .select('*')
+        .eq('organization_name', currentOrganization)
+        .order('name');
+      
+      if (sitesError) throw sitesError;
+      setSites(sitesData || []);
       
     } catch (err: any) {
       console.error('Error fetching organization data:', err);
@@ -479,21 +514,21 @@ export const AdminClientPilotage: React.FC = () => {
         {[
           {
             title: 'Filières',
-            value: 0,
+            value: businessLines.length,
             icon: Layers,
             color: 'bg-blue-500',
             change: 'Stable'
           },
           {
             title: 'Filiales',
-            value: 0,
+            value: subsidiaries.length,
             icon: Building,
             color: 'bg-purple-500',
             change: 'Stable'
           },
           {
             title: 'Sites',
-            value: 0,
+            value: sites.length,
             icon: Factory,
             color: 'bg-amber-500',
             change: 'Stable'
