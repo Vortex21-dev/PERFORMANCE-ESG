@@ -83,7 +83,7 @@ export async function diagnoseSiteConsolidation(
       .from('site_indicator_values_consolidated')
       .select('id, value_consolidated, sites_count')
       .eq('organization_name', organizationName)
-      .eq('site_name', siteName);
+      .or(`site_name.eq.${siteName},site_name.is.null`);
 
     const appearsInConsolidated = !consolidatedError && consolidatedData && consolidatedData.length > 0;
 
