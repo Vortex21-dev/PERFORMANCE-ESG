@@ -233,6 +233,8 @@ export const AdminClientPilotage: React.FC = () => {
       
       if (sitesError) throw sitesError;
       setSites(sitesData || []);
+
+      console.log('Sites fetched:', sitesData);
       
     } catch (err: any) {
       console.error('Error fetching organization data:', err);
@@ -290,12 +292,16 @@ export const AdminClientPilotage: React.FC = () => {
     }
   };
 
+  const fetchConsolidatedData = async () => {
+    // Implementation for fetchConsolidatedData
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
       // Refresh consolidated data using the correct function name
       await supabase.rpc('refresh_consolidated_views');
-      await fetchSites();
+      await fetchOrganizationData();
       await fetchConsolidatedData();
       toast.success('Données actualisées');
     } catch (error) {
