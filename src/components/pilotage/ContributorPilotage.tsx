@@ -370,55 +370,70 @@ export const ContributorPilotage: React.FC = () => {
 
   /* ----------  SAISIE / INSERT / UPDATE  ---------- */
   const handleValueChange = async (value: IndicatorValue, newValueStr: string) => {
-    const newValue = newValueStr ? parseFloat(newValueStr) : null;
-    if (newValue !== null && isNaN(newValue)) {
-      toast.error('Veuillez entrer un nombre valide');
-      return;
+  const newValue = newValueStr === '' ? null : parseFloat(newValueStr);
+  if (newValue !== null && isNaN(newValue)) {
+    toast.error('Veuillez entrer un nombre valide');
+    return;
+  }
+
+  try {
+    const now = new Date().toISOString();
+
+    /* 1) PREMIER ENREGISTREMENT : INSERT complet */
+    if (value.id.startsWith('empty-')) {
+      const { data: inserted, error } = await supabase
+        .from('indicator_values')
+        .insert({
+          organization_name: currentOrganization!,
+          business_line_name: userHierarchy.business_line_name,
+          subsidiary_name: userHierarchy.subsidiary_name,
+          site_name: userHierarchy.site_name,
+          year: selectedYear,
+          month: selectedMonth,
+          process_code: value.process_code,
+          indicator_code: value.indicator_code,
+          value: newValue,
+          unit: value.unit || null,
+          status: 'draft',
+          comment: null,
+          created_at: now,
+          updated_at: now,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
     }
 
-    try {
-      // 1) Premier enregistrement : INSERT
-      if (value.id.startsWith('empty-')) {
-        const { data: inserted, error } = await supabase
-          .from('indicator_values')
-          .insert({
-            organization_name: currentOrganization!,
-            business_line_name: userHierarchy.business_line_name,
-            subsidiary_name: userHierarchy.subsidiary_name,
-            site_name: userHierarchy.site_name,
-            year: selectedYear,
-            month: selectedMonth,
-            process_code: value.process_code,
-            indicator_code: value.indicator_code,
-            value: newValue,
-            status: 'draft',
-          })
-          .select()
-          .single();
-        if (error) throw error;
+    /* 2) MISE À JOUR */
+    else {
+      const { error } = await supabase
+        .from('indicator_values')
+        .update({
+          value: newValue,
+          unit: value.unit || null,
+          status: 'draft',
+          updated_at: now,
+        })
+        .eq('id', value.id);
 
-        setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
-      } else {
-        // 2) Mise à jour simple
-        const { error } = await supabase
-          .from('indicator_values')
-          .update({ value: newValue, status: 'draft' })
-          .eq('id', value.id);
-        if (error) throw error;
-
-        setValues(prev =>
-          prev.map(v => (v.id === value.id ? { ...v, value: newValue, status: 'draft' } : v))
-        );
-      }
-
-      setEditingValue(null);
-      setTempValue('');
-      toast.success('Valeur mise à jour');
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors de la mise à jour');
+      if (error) throw error;
+      setValues(prev =>
+        prev.map(v =>
+          v.id === value.id ? { ...v, value: newValue, status: 'draft' } : v
+        )
+      );
     }
-  };
+
+    setEditingValue(null);
+    setTempValue('');
+    toast.success('Valeur mise à jour');
+  } catch (err: any) {
+    console.error(err);
+    toast.error('Erreur lors de la mise à jour');
+  }
+};
 
   const handleSubmit = async () => {
     const draftValues = values.filter(v => v.status === 'draft' && v.value !== null);
