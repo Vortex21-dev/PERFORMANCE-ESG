@@ -281,7 +281,111 @@ export const ContributorPilotage: React.FC = () => {
         } else {
           console.log(`⚠️ Indicator ${ic} not found in indicators table (searched by code and name)`);
           
-          // Essayer de créer l'indicateur manquant dans la base
+          // Check if indicator already exists before creating
+          const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
+          
+          // First check if indicator with this code already exists
+          const { data: existingIndicator, error: checkError } = await supabase
+            .from('indicators')
+            .select('*')
+            .eq('code', placeholderCode)
+            .single();
+          
+          if (existingIndicator && !checkError) {
+            console.log(`✅ Found existing indicator: ${placeholderCode}`);
+            mapped.push({
+              indicator_code: existingIndicator.code,
+              indicator_name: existingIndicator.name,
+              unit: existingIndicator.unit,
+              process_code: p.code,
+              process_name: p.name,
+            });
+          } else {
+            // Create new indicator only if it doesn't exist
+            console.log(`📝 Creating new indicator: ${placeholderCode}`);
+            
+            const { data: newIndicator, error: createError } = await supabase
+              .from('indicators')
+              .insert({
+                code: placeholderCode,
+                name: ic,
+                unit: getDefaultUnit(ic),
+                type: 'primaire',
+                axe: 'Social',
+                formule: 'somme',
+                frequence: 'mensuelle'
+              })
+              .select()
+              .single();
+            
+            if (!createError && newIndicator) {
+              console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
+              mapped.push({
+                indicator_code: newIndicator.code,
+                indicator_name: newIndicator.name,
+                unit: newIndicator.unit,
+                process_code: p.code,
+                process_name: p.name,
+              });
+            } else {
+              console.log(`❌ Failed to create indicator: ${createError?.message}`);
+              // Fallback to placeholder
+              mapped.push({
+                indicator_code: placeholderCode,
+                indicator_name: ic,
+                unit: getDefaultUnit(ic),
+                process_code: p.code,
+                process_name: p.name,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error processing indicator ${ic}:`, error);
+        // Fallback to placeholder
+        const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
+        mapped.push({
+          indicator_code: placeholderCode,
+          indicator_name: ic,
+          unit: getDefaultUnit(ic),
+          process_code: p.code,
+          process_name: p.name,
+        });
+      }
+    }
+  }
+
+  console.log('✅ Final mapped indicators:', mapped);
+
+  setOrganizationIndicators(mapped);
+  setIndicators(indicators || []);
+};
+
+// Fonction pour deviner l'unité par défaut basée sur le nom de l'indicateur
+const getDefaultUnit = (indicatorName: string): string => {
+  const name = indicatorName.toLowerCase();
+  
+  if (name.includes('nombre') || name.includes('total') || name.includes('effectif')) {
+    return 'nombre';
+  }
+  if (name.includes('ratio') || name.includes('taux') || name.includes('pourcentage')) {
+    return '%';
+  }
+  if (name.includes('rotation') || name.includes('turnover')) {
+    return '%';
+  }
+  if (name.includes('équité') || name.includes('equity')) {
+    return 'ratio';
+  }
+  if (name.includes('composition') || name.includes('conseil')) {
+    return '%';
+  }
+  if (name.includes('violation') || name.includes('incident')) {
+    return 'nombre';
+  }
+  
+  return 'unité'; // Unité par défaut
+};
           try {
             const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
             const { data: newIndicator, error: createError } = await supabase
