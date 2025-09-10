@@ -27,9 +27,6 @@ interface IndicatorValue {
   business_line_name?: string | null;
   subsidiary_name?: string | null;
   site_name?: string | null;
-  business_line_key?: string;
-  subsidiary_key?: string;
-  site_key?: string;
   year: number;
   month: number;
   process_code: string;
@@ -354,12 +351,9 @@ export const ContributorPilotage: React.FC = () => {
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
         organization_name: currentOrganization!,
-        business_line_name: hierarchyData.business_line_name,
-        subsidiary_name: hierarchyData.subsidiary_name,
-        site_name: hierarchyData.site_name,
-        business_line_key: hierarchyData.business_line_key,
-        subsidiary_key: hierarchyData.subsidiary_key,
-        site_key: hierarchyData.site_key,
+        business_line_name: userHierarchy.business_line_name,
+        subsidiary_name: userHierarchy.subsidiary_name,
+        site_name: userHierarchy.site_name,
         year,
         month,
         process_code: orgInd.process_code,
@@ -383,28 +377,15 @@ export const ContributorPilotage: React.FC = () => {
     }
 
     try {
-      // Utiliser directement la hiérarchie de l'utilisateur sans validation
-      const hierarchyData = {
-        business_line_name: userHierarchy.business_line_name,
-        subsidiary_name: userHierarchy.subsidiary_name,
-        site_name: userHierarchy.site_name,
-        business_line_key: userHierarchy.business_line_name || '',
-        subsidiary_key: userHierarchy.subsidiary_name || '',
-        site_key: userHierarchy.site_name || ''
-      };
-
       // 1) Premier enregistrement : INSERT
       if (value.id.startsWith('empty-')) {
         const { data: inserted, error } = await supabase
           .from('indicator_values')
           .insert({
             organization_name: currentOrganization!,
-            business_line_name: hierarchyData.business_line_name,
-            subsidiary_name: hierarchyData.subsidiary_name,
-            site_name: hierarchyData.site_name,
-            business_line_key: hierarchyData.business_line_key,
-            subsidiary_key: hierarchyData.subsidiary_key,
-            site_key: hierarchyData.site_key,
+            business_line_name: userHierarchy.business_line_name,
+            subsidiary_name: userHierarchy.subsidiary_name,
+            site_name: userHierarchy.site_name,
             year: selectedYear,
             month: selectedMonth,
             process_code: value.process_code,
