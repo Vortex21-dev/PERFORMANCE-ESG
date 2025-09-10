@@ -238,7 +238,18 @@ export const ContributorPilotage: React.FC = () => {
             process_name: p.name,
           });
         } else {
-          console.log(`⚠️ Indicator ${ic} not found in indicators table - skipping to avoid foreign key constraint violation`);
+          console.log(`⚠️ Indicator ${ic} not found in indicators table (searched by code and name)`);
+          
+          // Create a placeholder indicator if it doesn't exist
+          const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
+          mapped.push({
+            indicator_code: placeholderCode,
+            indicator_name: ic,
+            unit: '',
+            process_code: p.code,
+            process_name: p.name,
+          });
+          console.log(`📝 Created placeholder for indicator: ${ic} -> ${placeholderCode}`);
         }
       });
     });
