@@ -106,60 +106,38 @@ export const ContributorPilotage: React.FC = () => {
     setProcesses(data || []);
   };
 
-const fetchOrganizationIndicators = async () => {
-  if (!profile?.email || !currentOrganization) return;
+  const fetchOrganizationIndicators = async () => {
+    const { data: userProcesses } = await supabase
+      .from('user_processes')
+      .select('process_codes')
+      .eq('email', profile?.email)
+      .single();
+    if (!userProcesses?.process_codes?.length) return;
 
-  /* 1. Processus que l’organisation doit remplir */
-  const { data: orgProcs } = await supabase
-    .from('organization_processes')
-    .select('process_code')
-    .eq('organization_name', currentOrganization);
-
-  const orgProcCodes = (orgProcs || []).map(p => p.process_code);
-  if (!orgProcCodes.length) return;
-
-  /* 2. Processus que le contributeur est habilité à voir */
-  const { data: userProcs } = await supabase
-    .from('user_processes')
-    .select('process_codes')
-    .eq('email', profile.email)
-    .single();
-
-  const allowedProcCodes = (userProcs?.process_codes || [])
-    .filter((c: string) => orgProcCodes.includes(c));   // intersection
-
-  if (!allowedProcCodes.length) return;
-
-  /* 3. Détails des processus + indicateurs */
-  const [{ data: procDetails }, { data: indicators }] = await Promise.all([
-    supabase
+    const { data: processDetails } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
-      .in('code', allowedProcCodes),
-    supabase
+      .in('code', userProcesses.process_codes);
+
+    const indicatorCodes = new Set<string>();
+    processDetails?.forEach(p => p.indicator_codes?.forEach((c: string) => indicatorCodes.add(c)));
+
+    const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
-      .in('code', Array.from(new Set(procDetails?.flatMap(p => p.indicator_codes) || []))),
-  ]);
+      .in('code', Array.from(indicatorCodes));
 
-  /* 4. Mapping final */
-  const mapped: OrganizationIndicator[] = [];
-  procDetails?.forEach(p =>
-    p.indicator_codes?.forEach((ic: string) => {
-      const ind = indicators?.find(i => i.code === ic);
-      if (ind) mapped.push({
-        indicator_code: ind.code,
-        indicator_name: ind.name,
-        unit: ind.unit,
-        process_code: p.code,
-        process_name: p.name,
+    const mapped: OrganizationIndicator[] = [];
+    processDetails?.forEach(p => {
+      p.indicator_codes?.forEach((ic: string) => {
+        const ind = indicatorDetails?.find(i => i.code === ic);
+        if (ind) mapped.push({ indicator_code: ind.code, indicator_name: ind.name, unit: ind.unit, process_code: p.code, process_name: p.name });
       });
-    })
-  );
-
-  setOrganizationIndicators(mapped);
-  setIndicators(indicators || []);
-};
+    });
+ 
+    setOrganizationIndicators(mapped);
+    setIndicators(indicatorDetails || []);
+  };
 
   /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
   const fetchValues = async (year: number, month: number) => {
