@@ -107,38 +107,57 @@ export const ContributorPilotage: React.FC = () => {
   }; 
 
   const fetchOrganizationIndicators = async () => {
-    const { data: userProcesses } = await supabase
-      .from('user_processes')
-      .select('process_codes')
-      .eq('email', profile?.email)
-      .single();
-    if (!userProcesses?.process_codes?.length) return;
+  if (!profile?.email || !currentOrganization) return;
 
-    const { data: processDetails } = await supabase
-      .from('processes')
-      .select('code, name, indicator_codes')
-      .in('code', userProcesses.process_codes);
+  /* 1. Processus de l’organisation */
+  const { data: orgProcesses } = await supabase
+    .from('processes')
+    .select('code, name, indicator_codes')
+    .eq('organization_name', currentOrganization);
 
-    const indicatorCodes = new Set<string>();
-    processDetails?.forEach(p => p.indicator_codes?.forEach((c: string) => indicatorCodes.add(c)));
+  const orgProcCodes = (orgProcesses || []).map(p => p.code);
+  if (!orgProcCodes.length) return;
 
-    const { data: indicatorDetails } = await supabase
-      .from('indicators')
-      .select('*')
-      .in('code', Array.from(indicatorCodes));
+  /* 2. Processus autorisés pour le contributeur */
+  const { data: userProcs } = await supabase
+    .from('user_processes')
+    .select('process_codes')
+    .eq('email', profile.email)
+    .single();
 
-    const mapped: OrganizationIndicator[] = [];
-    processDetails?.forEach(p => {
+  const allowedProcCodes = (userProcs?.process_codes || [])
+    .filter((c: string) => orgProcCodes.includes(c));
+
+  if (!allowedProcCodes.length) return;
+
+  /* 3. Indicateurs correspondants */
+  const { data: indicators } = await supabase
+    .from('indicators')
+    .select('*')
+    .in('code', Array.from(new Set(orgProcesses
+      .filter(p => allowedProcCodes.includes(p.code))
+      .flatMap(p => p.indicator_codes))));
+
+  /* 4. Mapping final */
+  const mapped: OrganizationIndicator[] = [];
+  orgProcesses
+    .filter(p => allowedProcCodes.includes(p.code))
+    .forEach(p =>
       p.indicator_codes?.forEach((ic: string) => {
-        const ind = indicatorDetails?.find(i => i.code === ic);
-        if (ind) mapped.push({ indicator_code: ind.code, indicator_name: ind.name, unit: ind.unit, process_code: p.code, process_name: p.name });
-      });
-    });
- 
-    setOrganizationIndicators(mapped);
-    setIndicators(indicatorDetails || []);
-  };
+        const ind = indicators?.find(i => i.code === ic);
+        if (ind) mapped.push({
+          indicator_code: ind.code,
+          indicator_name: ind.name,
+          unit: ind.unit,
+          process_code: p.code,
+          process_name: p.name,
+        });
+      })
+    );
 
+  setOrganizationIndicators(mapped);
+  setIndicators(indicators || []);
+};
   /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
