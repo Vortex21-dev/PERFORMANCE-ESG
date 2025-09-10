@@ -107,57 +107,105 @@ export const ContributorPilotage: React.FC = () => {
   }; 
 
   const fetchOrganizationIndicators = async () => {
-  if (!profile?.email || !currentOrganization) return;
+    if (!profile?.email || !currentOrganization) {
+      console.log('❌ Missing profile email or organization:', { email: profile?.email, org: currentOrganization });
+      return;
+    }
 
-  /* 1. Processus de l’organisation */
-  const { data: orgProcesses } = await supabase
-    .from('processes')
-    .select('code, name, indicator_codes')
-    .eq('organization_name', currentOrganization);
+    console.log('🔍 Fetching organization indicators for:', { email: profile.email, org: currentOrganization });
 
-  const orgProcCodes = (orgProcesses || []).map(p => p.code);
-  if (!orgProcCodes.length) return;
+    /* 1. Processus assignés à l'utilisateur */
+    const { data: userProcs, error: userError } = await supabase
+      .from('user_processes')
+      .select('process_codes')
+      .eq('email', profile.email)
+      .single();
 
-  /* 2. Processus autorisés pour le contributeur */
-  const { data: userProcs } = await supabase
-    .from('user_processes')
-    .select('process_codes')
-    .eq('email', profile.email)
-    .single();
+    if (userError) {
+      console.error('❌ Error fetching user processes:', userError);
+      return;
+    }
 
-  const allowedProcCodes = (userProcs?.process_codes || [])
-    .filter((c: string) => orgProcCodes.includes(c));
+    const allowedProcCodes = userProcs?.process_codes || [];
+    console.log('📋 User assigned processes:', allowedProcCodes);
 
-  if (!allowedProcCodes.length) return;
+    if (!allowedProcCodes.length) {
+      console.log('⚠️ No processes assigned to user');
+      setOrganizationIndicators([]);
+      setIndicators([]);
+      return;
+    }
 
-  /* 3. Indicateurs correspondants */
-  const { data: indicators } = await supabase
-    .from('indicators')
-    .select('*')
-    .in('code', Array.from(new Set(orgProcesses
-      .filter(p => allowedProcCodes.includes(p.code))
-      .flatMap(p => p.indicator_codes))));
+    /* 2. Détails des processus assignés */
+    const { data: procDetails, error: procError } = await supabase
+      .from('processes')
+      .select('code, name, indicator_codes')
+      .in('code', allowedProcCodes);
 
-  /* 4. Mapping final */
-  const mapped: OrganizationIndicator[] = [];
-  orgProcesses
-    .filter(p => allowedProcCodes.includes(p.code))
-    .forEach(p =>
-      p.indicator_codes?.forEach((ic: string) => {
+    if (procError) {
+      console.error('❌ Error fetching process details:', procError);
+      return;
+    }
+
+    console.log('🔧 Process details found:', procDetails);
+
+    if (!procDetails || !procDetails.length) {
+      console.log('⚠️ No process details found for assigned codes');
+      setOrganizationIndicators([]);
+      setIndicators([]);
+      return;
+    }
+
+    /* 3. Récupération des indicateurs */
+    const allIndicatorCodes = procDetails.flatMap(p => p.indicator_codes || []);
+    console.log('📊 All indicator codes from processes:', allIndicatorCodes);
+
+    if (!allIndicatorCodes.length) {
+      console.log('⚠️ No indicators found in assigned processes');
+      setOrganizationIndicators([]);
+      setIndicators([]);
+      return;
+    }
+
+    const { data: indicators, error: indError } = await supabase
+      .from('indicators')
+      .select('*')
+      .in('code', allIndicatorCodes);
+
+    if (indError) {
+      console.error('❌ Error fetching indicators:', indError);
+      return;
+    }
+
+    console.log('📈 Indicators found:', indicators);
+
+    /* 4. Mapping final */
+    const mapped: OrganizationIndicator[] = [];
+    procDetails.forEach(p => {
+      const indicatorCodes = p.indicator_codes || [];
+      console.log(`🔗 Process ${p.code} (${p.name}) has indicators:`, indicatorCodes);
+      
+      indicatorCodes.forEach((ic: string) => {
         const ind = indicators?.find(i => i.code === ic);
-        if (ind) mapped.push({
-          indicator_code: ind.code,
-          indicator_name: ind.name,
-          unit: ind.unit,
-          process_code: p.code,
-          process_name: p.name,
-        });
-      })
-    );
+        if (ind) {
+          mapped.push({
+            indicator_code: ind.code,
+            indicator_name: ind.name,
+            unit: ind.unit,
+            process_code: p.code,
+            process_name: p.name,
+          });
+        } else {
+          console.log(`⚠️ Indicator ${ic} not found in indicators table`);
+        }
+      });
+    });
 
-  setOrganizationIndicators(mapped);
-  setIndicators(indicators || []);
-};
+    console.log('✅ Final mapped indicators:', mapped);
+
+    setOrganizationIndicators(mapped);
+    setIndicators(indicators || []);
+  };
   /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
@@ -485,16 +533,36 @@ export const ContributorPilotage: React.FC = () => {
           </div>
         )}
 
+        {/* Debug Panel - Only in development */}
+        {import.meta.env.DEV && (
+          <div className="mt-8 p-4 bg-gray-100 rounded-lg">
+            <h3 className="font-semibold mb-2">🔧 Debug Info</h3>
+            <div className="text-sm space-y-1">
+              <p><strong>Email:</strong> {profile?.email}</p>
+              <p><strong>Organisation:</strong> {currentOrganization}</p>
+              <p><strong>Indicateurs mappés:</strong> {organizationIndicators.length}</p>
+              <p><strong>Processus groupés:</strong> {Object.keys(grouped).length}</p>
+              <p><strong>Valeurs chargées:</strong> {values.length}</p>
+            </div>
+          </div>
+        )}
+
         {/* Affichage par processus */}
         {Object.entries(grouped).map(([processCode, indicators]) => {
           const open = expandedProcess === processCode;
+          const processName = getProcessName(processCode);
+          const indicatorCount = indicators.length;
+          
           return (
             <div key={processCode} className="mb-6 border rounded-lg bg-white shadow-sm">
               <div
                 onClick={() => setExpandedProcess(open ? null : processCode)}
                 className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50"
               >
-                <h3 className="text-lg font-semibold">{getProcessName(processCode)}</h3>
+                <div>
+                  <h3 className="text-lg font-semibold">{processName}</h3>
+                  <p className="text-sm text-gray-600">{indicatorCount} indicateur(s)</p>
+                </div>
                 {open ? <ChevronUp /> : <ChevronDown />}
               </div>
               {open && (
