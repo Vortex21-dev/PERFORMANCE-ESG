@@ -20,7 +20,6 @@ import { Loader } from 'lucide-react';
 import { PrivateRoute } from './components/ui/PrivateRoute';
 import SiteProcessesPage from './components/pilotage/SiteProcessesPage';
 import { AdminClientPilotage } from './components/pilotage/AdminClientPilotage';
-import PilotageEnergetique from './pages/enterprise/PilotageEnergetique';
 
 function App() {
   const { initializeSession, loading } = useAuthStore((state) => ({
@@ -127,14 +126,6 @@ function App() {
             element={
               <PrivateRoute requiredRole="enterprise">
                 <PilotageDashboard />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/enterprise/pilotage-energetique" 
-            element={
-              <PrivateRoute requiredRole="enterprise">
-                <PilotageEnergetique />
               </PrivateRoute>
             } 
           />
