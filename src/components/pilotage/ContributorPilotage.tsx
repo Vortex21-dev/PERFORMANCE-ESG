@@ -227,7 +227,8 @@ export const ContributorPilotage: React.FC = () => {
       console.log(`🔗 Process ${p.code} (${p.name}) has indicators:`, indicatorCodes);
       
       indicatorCodes.forEach((ic: string) => {
-        const ind = indicators?.find(i => i.code === ic);
+        // Try to find by code first, then by name
+        const ind = indicators?.find(i => i.code === ic || i.name === ic);
         if (ind) {
           mapped.push({
             indicator_code: ind.code,
@@ -237,7 +238,18 @@ export const ContributorPilotage: React.FC = () => {
             process_name: p.name,
           });
         } else {
-          console.log(`⚠️ Indicator ${ic} not found in indicators table`);
+          console.log(`⚠️ Indicator ${ic} not found in indicators table (searched by code and name)`);
+          
+          // Create a placeholder indicator if it doesn't exist
+          const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
+          mapped.push({
+            indicator_code: placeholderCode,
+            indicator_name: ic,
+            unit: '',
+            process_code: p.code,
+            process_name: p.name,
+          });
+          console.log(`📝 Created placeholder for indicator: ${ic} -> ${placeholderCode}`);
         }
       });
     });
@@ -266,7 +278,7 @@ export const ContributorPilotage: React.FC = () => {
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
 
-    // Fusionner les données existantes avec les “slots” vides
+    // Fusionner les données existantes avec les "slots" vides
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
         v =>
@@ -275,7 +287,7 @@ export const ContributorPilotage: React.FC = () => {
       );
       if (existing) return existing;
 
-      // Création d’un placeholder local
+      // Création d'un placeholder local
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
         organization_name: currentOrganization,
