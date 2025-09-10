@@ -109,55 +109,32 @@ export const ValidatorPilotage: React.FC = () => {
   };
 
   const fetchOrganizationIndicators = async () => {
-    // 1. Récupérer les processus assignés au validateur
     const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile?.email)
       .single();
 
-    const allowedProcessCodes = userProcesses?.process_codes || [];
-    if (!allowedProcessCodes.length) {
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
+    if (!userProcesses?.process_codes?.length) return;
 
-    // 2. Récupérer les détails des processus
     const { data: processDetails } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
-      .in('code', allowedProcessCodes);
+      .in('code', userProcesses.process_codes);
 
-    // 3. Extraire tous les codes d'indicateurs
-    const allIndicatorCodes = processDetails?.flatMap(p => p.indicator_codes || []) || [];
-    
-    if (!allIndicatorCodes.length) {
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
+    const indicatorCodes = new Set<string>();
+    processDetails?.forEach(p => p.indicator_codes?.forEach((c: string) => indicatorCodes.add(c)));
 
-    // 4. Récupérer les détails des indicateurs
     const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
-      .in('code', allIndicatorCodes);
+      .in('code', Array.from(indicatorCodes));
 
-    // 5. Créer le mapping processus-indicateurs
     const mapped: OrganizationIndicator[] = [];
-    processDetails?.forEach(process => {
+    processDetails?.forEach(p => {
       p.indicator_codes?.forEach((ic: string) => {
         const ind = indicatorDetails?.find(i => i.code === ic);
-        if (ind) {
-          mapped.push({
-            indicator_code: ind.code,
-            indicator_name: ind.name,
-            unit: ind.unit,
-            process_code: process.code,
-            process_name: process.name,
-          });
-        }
+        if (ind) mapped.push({ indicator_code: ind.code, indicator_name: ind.name, unit: ind.unit, process_code: p.code, process_name: p.name });
       });
     });
 
