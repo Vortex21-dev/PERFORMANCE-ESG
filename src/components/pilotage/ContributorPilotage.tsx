@@ -131,16 +131,15 @@ export const ContributorPilotage: React.FC = () => {
   if (!allowedProcCodes.length) return;
 
   /* 3. Détails des processus + indicateurs */
-  const [{ data: procDetails }, { data: indicators }] = await Promise.all([
-    supabase
-      .from('processes')
-      .select('code, name, indicator_codes')
-      .in('code', allowedProcCodes),
-    supabase
-      .from('indicators')
-      .select('*')
-      .in('code', Array.from(new Set(procDetails?.flatMap(p => p.indicator_codes) || []))),
-  ]);
+  const { data: procDetails } = await supabase
+    .from('processes')
+    .select('code, name, indicator_codes')
+    .in('code', allowedProcCodes);
+
+  const { data: indicators } = await supabase
+    .from('indicators')
+    .select('*')
+    .in('code', Array.from(new Set(procDetails?.flatMap(p => p.indicator_codes) || [])));
 
   /* 4. Mapping final */
   const mapped: OrganizationIndicator[] = [];
