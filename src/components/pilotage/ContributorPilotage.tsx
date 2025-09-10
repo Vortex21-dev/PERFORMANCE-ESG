@@ -79,6 +79,33 @@ export const ContributorPilotage: React.FC = () => {
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
   
+  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
+  const validateHierarchy = (hierarchy: {
+    business_line_name?: string | null;
+    subsidiary_name?: string | null;
+    site_name?: string | null;
+  }) => {
+    // Si site_name est présent, subsidiary_name et business_line_name doivent l'être aussi
+    if (hierarchy.site_name && (!hierarchy.subsidiary_name || !hierarchy.business_line_name)) {
+      return {
+        business_line_name: null,
+        subsidiary_name: null,
+        site_name: null
+      };
+    }
+    
+    // Si subsidiary_name est présent, business_line_name doit l'être aussi
+    if (hierarchy.subsidiary_name && !hierarchy.business_line_name) {
+      return {
+        business_line_name: null,
+        subsidiary_name: null,
+        site_name: null
+      };
+    }
+    
+    return hierarchy;
+  };
+
   // Get user's hierarchy level from profile
   const rawUserHierarchy = {
     organization_name: currentOrganization,
@@ -113,33 +140,6 @@ export const ContributorPilotage: React.FC = () => {
       fetchValues(selectedYear, selectedMonth);
     }
   }, [selectedYear, selectedMonth, currentOrganization, organizationIndicators]);
-
-  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
-  const validateHierarchy = (hierarchy: {
-    business_line_name?: string | null;
-    subsidiary_name?: string | null;
-    site_name?: string | null;
-  }) => {
-    // Si site_name est présent, subsidiary_name et business_line_name doivent l'être aussi
-    if (hierarchy.site_name && (!hierarchy.subsidiary_name || !hierarchy.business_line_name)) {
-      return {
-        business_line_name: null,
-        subsidiary_name: null,
-        site_name: null
-      };
-    }
-    
-    // Si subsidiary_name est présent, business_line_name doit l'être aussi
-    if (hierarchy.subsidiary_name && !hierarchy.business_line_name) {
-      return {
-        business_line_name: null,
-        subsidiary_name: null,
-        site_name: null
-      };
-    }
-    
-    return hierarchy;
-  };
 
   /* ----------  DATA DE BASE  ---------- */
   const fetchInitialData = async () => {
