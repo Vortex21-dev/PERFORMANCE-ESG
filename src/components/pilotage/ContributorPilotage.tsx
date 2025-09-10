@@ -246,6 +246,7 @@ export const ContributorPilotage: React.FC = () => {
       return;
     }
 
+    // Récupérer les indicateurs avec leurs unités depuis la table indicators
     const { data: indicators, error: indError } = await supabase
       .from('indicators')
       .select('*')
@@ -257,6 +258,7 @@ export const ContributorPilotage: React.FC = () => {
     }
 
     console.log('📈 Indicators found:', indicators);
+    console.log('🔍 Indicators with units:', indicators?.map(i => ({ code: i.code, name: i.name, unit: i.unit })));
 
     /* 4. Mapping final */
     const mapped: OrganizationIndicator[] = [];
@@ -268,6 +270,7 @@ export const ContributorPilotage: React.FC = () => {
         // Try to find by code first, then by name
         const ind = indicators?.find(i => i.code === ic || i.name === ic);
         if (ind) {
+          console.log(`✅ Found indicator ${ic} with unit: ${ind.unit}`);
           mapped.push({
             indicator_code: ind.code,
             indicator_name: ind.name,
@@ -278,16 +281,55 @@ export const ContributorPilotage: React.FC = () => {
         } else {
           console.log(`⚠️ Indicator ${ic} not found in indicators table (searched by code and name)`);
           
-          // Create a placeholder indicator if it doesn't exist
-          const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-          mapped.push({
-            indicator_code: placeholderCode,
-            indicator_name: ic,
-            unit: '',
-            process_code: p.code,
-            process_name: p.name,
-          });
-          console.log(`📝 Created placeholder for indicator: ${ic} -> ${placeholderCode}`);
+          // Essayer de créer l'indicateur manquant dans la base
+          try {
+            const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
+            const { data: newIndicator, error: createError } = await supabase
+              .from('indicators')
+              .insert({
+                code: placeholderCode,
+                name: ic,
+                unit: getDefaultUnit(ic), // Fonction pour deviner l'unité
+                type: 'primaire',
+                axe: 'Social', // Par défaut
+                formule: 'somme',
+                frequence: 'mensuelle'
+              })
+              .select()
+              .single();
+            
+            if (!createError && newIndicator) {
+              console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
+              mapped.push({
+                indicator_code: newIndicator.code,
+                indicator_name: newIndicator.name,
+                unit: newIndicator.unit,
+                process_code: p.code,
+                process_name: p.name,
+              });
+            } else {
+              console.log(`❌ Failed to create indicator: ${createError?.message}`);
+              // Fallback to placeholder
+              mapped.push({
+                indicator_code: placeholderCode,
+                indicator_name: ic,
+                unit: getDefaultUnit(ic),
+                process_code: p.code,
+                process_name: p.name,
+              });
+            }
+          } catch (error) {
+            console.error(`❌ Error creating indicator ${ic}:`, error);
+            // Fallback to placeholder
+            const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
+            mapped.push({
+              indicator_code: placeholderCode,
+              indicator_name: ic,
+              unit: getDefaultUnit(ic),
+              process_code: p.code,
+              process_name: p.name,
+            });
+          }
         }
       });
     });
@@ -297,6 +339,33 @@ export const ContributorPilotage: React.FC = () => {
     setOrganizationIndicators(mapped);
     setIndicators(indicators || []);
   };
+
+  // Fonction pour deviner l'unité par défaut basée sur le nom de l'indicateur
+  const getDefaultUnit = (indicatorName: string): string => {
+    const name = indicatorName.toLowerCase();
+    
+    if (name.includes('nombre') || name.includes('total') || name.includes('effectif')) {
+      return 'nombre';
+    }
+    if (name.includes('ratio') || name.includes('taux') || name.includes('pourcentage')) {
+      return '%';
+    }
+    if (name.includes('rotation') || name.includes('turnover')) {
+      return '%';
+    }
+    if (name.includes('équité') || name.includes('equity')) {
+      return 'ratio';
+    }
+    if (name.includes('composition') || name.includes('conseil')) {
+      return '%';
+    }
+    if (name.includes('violation') || name.includes('incident')) {
+      return 'nombre';
+    }
+    
+    return 'unité'; // Unité par défaut
+  };
+
   /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
