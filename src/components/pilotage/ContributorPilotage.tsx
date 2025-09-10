@@ -514,6 +514,7 @@ export const ContributorPilotage: React.FC = () => {
 
   const getIndicatorName = (c: string) => indicators.find(i => i.code === c)?.name || c;
   const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
+  const getIndicatorUnit = (c: string) => indicators.find(i => i.code === c)?.unit || '';
 
   /* ----------  RENDER  ---------- */
   if (loading) {
@@ -759,7 +760,7 @@ export const ContributorPilotage: React.FC = () => {
                               v.value?.toLocaleString() ?? '-'
                             )}
                           </td>
-                          <td className="px-6 py-4 text-sm">{v.unit || ''}</td>
+                          <td className="px-6 py-4 text-sm">{getIndicatorUnit(v.indicator_code)}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(v.status)}`}>
                               {getStatusLabel(v.status)}
