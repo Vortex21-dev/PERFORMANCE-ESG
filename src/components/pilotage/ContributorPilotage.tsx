@@ -78,14 +78,13 @@ export const ContributorPilotage: React.FC = () => {
   const [selectedStatCard, setSelectedStatCard] = useState<string | null>(null);
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
-  
+
   /* ----------  VALIDATION HIÉRARCHIE  ---------- */
   const validateHierarchy = (hierarchy: {
     business_line_name?: string | null;
     subsidiary_name?: string | null;
     site_name?: string | null;
   }) => {
-    // Si site_name est présent, subsidiary_name et business_line_name doivent l'être aussi
     if (hierarchy.site_name && (!hierarchy.subsidiary_name || !hierarchy.business_line_name)) {
       return {
         business_line_name: null,
@@ -94,7 +93,6 @@ export const ContributorPilotage: React.FC = () => {
       };
     }
     
-    // Si subsidiary_name est présent, business_line_name doit l'être aussi
     if (hierarchy.subsidiary_name && !hierarchy.business_line_name) {
       return {
         business_line_name: null,
@@ -106,7 +104,6 @@ export const ContributorPilotage: React.FC = () => {
     return hierarchy;
   };
 
-  // Get user's hierarchy level from profile
   const rawUserHierarchy = {
     organization_name: currentOrganization,
     business_line_name: profile?.business_line_name || null,
@@ -114,7 +111,6 @@ export const ContributorPilotage: React.FC = () => {
     site_name: profile?.site_name || null
   };
 
-  // Validate hierarchy to ensure database constraints are met
   const validatedHierarchy = validateHierarchy({
     business_line_name: rawUserHierarchy.business_line_name,
     subsidiary_name: rawUserHierarchy.subsidiary_name,
@@ -126,7 +122,6 @@ export const ContributorPilotage: React.FC = () => {
     ...validatedHierarchy
   };
 
-  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
   /* ----------  HOOKS  ---------- */
   useEffect(() => {
     if (!profile || profile.role !== 'contributor') {
@@ -162,7 +157,6 @@ export const ContributorPilotage: React.FC = () => {
       return;
     }
 
-    /* 1. Récupérer les processus assignés à l'utilisateur */
     const { data: userProcs, error: userError } = await supabase
       .from('user_processes')
       .select('process_codes')
@@ -182,7 +176,6 @@ export const ContributorPilotage: React.FC = () => {
       return;
     }
 
-    /* 2. Récupérer les détails des processus assignés */
     const { data: procDetails, error: procError } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
@@ -199,7 +192,6 @@ export const ContributorPilotage: React.FC = () => {
       return;
     }
 
-    /* 3. Récupérer les indicateurs associés */
     const allIndicatorCodes = procDetails.flatMap(p => p.indicator_codes || []);
 
     if (!allIndicatorCodes.length) {
@@ -218,7 +210,6 @@ export const ContributorPilotage: React.FC = () => {
       return;
     }
 
-    /* 4. Créer le mapping final */
     const mapped: OrganizationIndicator[] = [];
     for (const p of procDetails) {
       const indicatorCodes = p.indicator_codes || [];
@@ -234,7 +225,6 @@ export const ContributorPilotage: React.FC = () => {
             process_name: p.name,
           });
         } else {
-          // Créer un indicateur manquant si nécessaire
           const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
           
           const { data: existingIndicator, error: checkError } = await supabase
@@ -303,7 +293,6 @@ export const ContributorPilotage: React.FC = () => {
     setIndicators(indicators || []);
   };
 
-  // Fonction pour deviner l'unité par défaut basée sur le nom de l'indicateur
   const getDefaultUnit = (indicatorName: string): string => {
     const name = indicatorName.toLowerCase();
     
@@ -326,7 +315,7 @@ export const ContributorPilotage: React.FC = () => {
       return 'nombre';
     }
     
-    return 'unité'; // Unité par défaut
+    return 'unité';
   };
 
   /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
@@ -334,14 +323,12 @@ export const ContributorPilotage: React.FC = () => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
 
-    // Récupérer les processus assignés à l'utilisateur
     const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile?.email)
       .single();
 
-    // Construire la requête avec la hiérarchie de l'utilisateur
     let query = supabase
       .from('indicator_values')
       .select('*')
@@ -350,7 +337,6 @@ export const ContributorPilotage: React.FC = () => {
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
     
-    // Filtrer selon le niveau hiérarchique de l'utilisateur
     if (userHierarchy.site_name) {
       query = query.eq('site_name', userHierarchy.site_name);
     } else if (userHierarchy.subsidiary_name) {
@@ -361,14 +347,12 @@ export const ContributorPilotage: React.FC = () => {
     
     const { data } = await query;
 
-    // Utiliser la hiérarchie validée de l'utilisateur
     const hierarchyData = {
       business_line_name: userHierarchy.business_line_name,
       subsidiary_name: userHierarchy.subsidiary_name,
       site_name: userHierarchy.site_name,
     };
 
-    // Créer les entrées pour tous les indicateurs (existants + vides)
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
         v =>
@@ -377,7 +361,6 @@ export const ContributorPilotage: React.FC = () => {
       );
       if (existing) return existing;
 
-      // Créer une entrée vide pour les indicateurs sans valeur
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
         organization_name: currentOrganization!,
@@ -411,9 +394,7 @@ export const ContributorPilotage: React.FC = () => {
       const currentYear = selectedYear;
       const currentMonth = selectedMonth;
 
-      /* 1. Premier enregistrement : INSERT avec hiérarchie validée */
       if (value.id.startsWith('empty-')) {
-        // Récupérer la période de collecte active
         const { data: activePeriod } = await supabase
           .from('collection_periods')
           .select('id')
@@ -452,10 +433,7 @@ export const ContributorPilotage: React.FC = () => {
 
         if (error) throw error;
         setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
-      }
-
-      /* 2. Mise à jour d'une valeur existante */
-      else {
+      } else {
         const { error } = await supabase
           .from('indicator_values')
           .update({
@@ -563,17 +541,19 @@ export const ContributorPilotage: React.FC = () => {
   const getStatusLabel = (s: string) =>
     ({ validated: 'Validé', rejected: 'Rejeté', submitted: 'Soumis', draft: 'Brouillon' }[s] || '');
 
-  const getIndicatorName = (c: string) => indicators.find(i => i.code === c)?.name || c;
-  const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
-  const getIndicatorUnit = (c: string) => {
-    const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
-    if (orgIndicator?.unit) {
-      return orgIndicator.unit;
-    }
-    
+  const getIndicatorName = (c: string) => {
     const indicator = indicators.find(i => i.code === c);
-    const unit = indicator?.unit || '';
-    return unit;
+    const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
+    const name = indicator?.name || orgIndicator?.indicator_name || c;
+    return name.replace(/_/g, ' ').replace(/-/g, ' ');
+  };
+
+  const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
+
+  const getIndicatorUnit = (c: string) => {
+    const indicator = indicators.find(i => i.code === c);
+    const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
+    return indicator?.unit || orgIndicator?.unit || '';
   };
 
   /* ----------  RENDER  ---------- */
