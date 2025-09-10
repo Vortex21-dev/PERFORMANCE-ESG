@@ -112,33 +112,44 @@ export const ContributorPilotage: React.FC = () => {
   const fetchOrganizationIndicators = async () => {
     if (!profile?.email || !currentOrganization) return;
 
-    const { data: userProcs } = await supabase
+    // 1. Récupérer les processus assignés à l'utilisateur
+    const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile.email)
       .single();
 
-    const allowedProcCodes = userProcs?.process_codes || [];
-    if (!allowedProcCodes.length) {
+    const allowedProcessCodes = userProcesses?.process_codes || [];
+    if (!allowedProcessCodes.length) {
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    const { data: procDetails } = await supabase
+    // 2. Récupérer les détails des processus
+    const { data: processDetails } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
-      .in('code', allowedProcCodes);
+      .in('code', allowedProcessCodes);
 
-    const allIndicatorCodes = procDetails?.flatMap(p => p.indicator_codes || []) || [];
+    // 3. Extraire tous les codes d'indicateurs des processus
+    const allIndicatorCodes = processDetails?.flatMap(p => p.indicator_codes || []) || [];
+    
+    if (!allIndicatorCodes.length) {
+      setOrganizationIndicators([]);
+      setIndicators([]);
+      return;
+    }
 
+    // 4. Récupérer les détails des indicateurs
     const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
       .in('code', allIndicatorCodes);
 
+    // 5. Créer le mapping processus-indicateurs
     const mapped: OrganizationIndicator[] = [];
-    procDetails?.forEach(p => {
+    processDetails?.forEach(p => {
       p.indicator_codes?.forEach((ic: string) => {
         const ind = indicatorDetails?.find(i => i.code === ic);
         if (ind) {
