@@ -330,73 +330,53 @@ export const ContributorPilotage: React.FC = () => {
   };
 
   /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
-  const fetchValues = async (year: number, month: number) => {
-    if (!currentOrganization || !organizationIndicators.length) return;
-    setLoading(true);
+const fetchValues = async (year: number, month: number) => {
+  if (!currentOrganization || !organizationIndicators.length) return;
+  setLoading(true);
 
-    // Récupérer les processus assignés à l'utilisateur
-    const { data: userProcesses } = await supabase
-      .from('user_processes')
-      .select('process_codes')
-      .eq('email', profile?.email)
-      .single();
+  const { data: userProcs } = await supabase
+    .from('user_processes')
+    .select('process_codes')
+    .eq('email', profile!.email)
+    .single();
 
-    // Construire la requête avec la hiérarchie de l'utilisateur
-    let query = supabase
-      .from('indicator_values')
-      .select('*')
-      .eq('organization_name', currentOrganization)
-      .eq('year', year)
-      .eq('month', month)
-      .in('process_code', userProcesses?.process_codes || []);
-    
-    // Filtrer selon le niveau hiérarchique de l'utilisateur
-    if (userHierarchy.site_name) {
-      query = query.eq('site_name', userHierarchy.site_name);
-    } else if (userHierarchy.subsidiary_name) {
-      query = query.eq('subsidiary_name', userHierarchy.subsidiary_name);
-    } else if (userHierarchy.business_line_name) {
-      query = query.eq('business_line_name', userHierarchy.business_line_name);
-    }
-    
-    const { data } = await query;
+  // 1. Récupérer TOUTES les valeurs déjà saisies pour l’orga + période + processus autorisés
+  const { data } = await supabase
+    .from('indicator_values')
+    .select('*')
+    .eq('organization_name', currentOrganization)
+    .eq('year', year)
+    .eq('month', month)
+    .in('process_code', userProcs?.process_codes ?? []);
 
-    // Utiliser la hiérarchie validée de l'utilisateur
-    const hierarchyData = {
-      business_line_name: userHierarchy.business_line_name,
-      subsidiary_name: userHierarchy.subsidiary_name,
-      site_name: userHierarchy.site_name,
+  // 2. Créer les slots vides (brouillon) pour les indicateurs manquants
+  const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
+    const existing = (data || []).find(
+      v =>
+        v.indicator_code === orgInd.indicator_code &&
+        v.process_code === orgInd.process_code
+    );
+    if (existing) return existing;
+
+    return {
+      id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
+      organization_name: currentOrganization!,
+      business_line_name: profile?.business_line_name ?? null,
+      subsidiary_name: profile?.subsidiary_name ?? null,
+      site_name: profile?.site_name ?? null,
+      year,
+      month,
+      process_code: orgInd.process_code,
+      indicator_code: orgInd.indicator_code,
+      unit: orgInd.unit || '',
+      value: null,
+      status: 'draft',
     };
+  });
 
-    // Créer les entrées pour tous les indicateurs (existants + vides)
-    const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
-      const existing = (data || []).find(
-        v =>
-          v.indicator_code === orgInd.indicator_code &&
-          v.process_code === orgInd.process_code
-      );
-      if (existing) return existing;
-
-      // Créer une entrée vide pour les indicateurs sans valeur
-      return {
-        id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
-        organization_name: currentOrganization!,
-        business_line_name: userHierarchy.business_line_name,
-        subsidiary_name: userHierarchy.subsidiary_name,
-        site_name: userHierarchy.site_name,
-        year,
-        month,
-        process_code: orgInd.process_code,
-        indicator_code: orgInd.indicator_code,
-        unit: orgInd.unit || '',
-        value: null,
-        status: 'draft',
-      };
-    });
-
-    setValues(enriched);
-    setLoading(false);
-  };
+  setValues(enriched);
+  setLoading(false);
+};
 
   /* ----------  SAISIE / INSERT / UPDATE  ---------- */
   const handleValueChange = async (value: IndicatorValue, newValueStr: string) => {
