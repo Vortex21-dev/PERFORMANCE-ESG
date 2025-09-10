@@ -422,7 +422,7 @@ export const ContributorPilotage: React.FC = () => {
           .eq('period_type', 'month')
           .eq('period_number', currentMonth)
           .eq('status', 'open')
-          .single();
+          .maybeSingle();
 
         const { data: inserted, error } = await supabase
           .from('indicator_values')
@@ -432,9 +432,6 @@ export const ContributorPilotage: React.FC = () => {
             business_line_name: userHierarchy.business_line_name,
             subsidiary_name: userHierarchy.subsidiary_name,
             site_name: userHierarchy.site_name,
-            business_line_key: userHierarchy.business_line_name || '',
-            subsidiary_key: userHierarchy.subsidiary_name || '',
-            site_key: userHierarchy.site_name || '',
             year: currentYear,
             month: currentMonth,
             process_code: value.process_code,
@@ -466,9 +463,6 @@ export const ContributorPilotage: React.FC = () => {
             unit: value.unit || null,
             status: 'draft',
             updated_at: now,
-            business_line_key: userHierarchy.business_line_name || '',
-            subsidiary_key: userHierarchy.subsidiary_name || '',
-            site_key: userHierarchy.site_name || '',
             year: currentYear,
             month: currentMonth,
             submitted_by: profile?.email || null,
