@@ -97,7 +97,7 @@ export default function ProcessStepUsers() {
         name: p.name,
         description: p.description,
         indicator_codes: p.indicator_codes,
-        organisation_name: selectedOrg,
+        organization_name: selectedOrg,
       });
     }
     toast.success('Processus créés');
