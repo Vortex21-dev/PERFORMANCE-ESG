@@ -515,12 +515,24 @@ export const ContributorPilotage: React.FC = () => {
   const getIndicatorName = (c: string) => indicators.find(i => i.code === c)?.name || c;
   const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
   const getIndicatorUnit = (c: string) => {
-    // Chercher d'abord dans organizationIndicators (qui contient les unités)
-    const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
-    if (orgIndicator?.unit) return orgIndicator.unit;
+    console.log('🔍 Getting unit for indicator:', c);
+    console.log('📊 organizationIndicators:', organizationIndicators);
+    console.log('📈 indicators:', indicators);
     
-    // Fallback vers indicators si pas trouvé
-    return indicators.find(i => i.code === c)?.unit || '';
+    // Chercher d'abord dans organizationIndicators
+    const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
+    console.log('🎯 Found orgIndicator:', orgIndicator);
+    if (orgIndicator?.unit) {
+      console.log('✅ Unit from orgIndicator:', orgIndicator.unit);
+      return orgIndicator.unit;
+    }
+    
+    // Fallback vers indicators
+    const indicator = indicators.find(i => i.code === c);
+    console.log('🔄 Fallback indicator:', indicator);
+    const unit = indicator?.unit || '';
+    console.log('📏 Final unit:', unit);
+    return unit;
   };
 
   /* ----------  RENDER  ---------- */
