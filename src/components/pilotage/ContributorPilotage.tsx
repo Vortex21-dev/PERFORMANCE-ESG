@@ -80,11 +80,23 @@ export const ContributorPilotage: React.FC = () => {
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
   
   // Get user's hierarchy level from profile
-  const userHierarchy = {
+  const rawUserHierarchy = {
     organization_name: currentOrganization,
     business_line_name: profile?.business_line_name || null,
     subsidiary_name: profile?.subsidiary_name || null,
     site_name: profile?.site_name || null
+  };
+
+  // Validate hierarchy to ensure database constraints are met
+  const validatedHierarchy = validateHierarchy({
+    business_line_name: rawUserHierarchy.business_line_name,
+    subsidiary_name: rawUserHierarchy.subsidiary_name,
+    site_name: rawUserHierarchy.site_name
+  });
+
+  const userHierarchy = {
+    organization_name: currentOrganization,
+    ...validatedHierarchy
   };
 
   /* ----------  HOOKS  ---------- */
