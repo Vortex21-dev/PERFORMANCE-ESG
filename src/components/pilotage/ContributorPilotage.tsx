@@ -75,6 +75,14 @@ export const ContributorPilotage: React.FC = () => {
   const [selectedStatCard, setSelectedStatCard] = useState<string | null>(null);
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
+  
+  // Get user's hierarchy level from profile
+  const userHierarchy = {
+    organization_name: currentOrganization,
+    business_line_name: profile?.business_line_name || null,
+    subsidiary_name: profile?.subsidiary_name || null,
+    site_name: profile?.site_name || null
+  };
 
   /* ----------  HOOKS  ---------- */
   useEffect(() => {
@@ -270,13 +278,25 @@ export const ContributorPilotage: React.FC = () => {
       .eq('email', profile?.email)
       .single();
 
-    const { data } = await supabase
+    // Build query with user's hierarchy
+    let query = supabase
       .from('indicator_values')
       .select('*')
       .eq('organization_name', currentOrganization)
       .eq('year', year)
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
+    
+    // Filter by user's hierarchy level
+    if (userHierarchy.site_name) {
+      query = query.eq('site_name', userHierarchy.site_name);
+    } else if (userHierarchy.subsidiary_name) {
+      query = query.eq('subsidiary_name', userHierarchy.subsidiary_name);
+    } else if (userHierarchy.business_line_name) {
+      query = query.eq('business_line_name', userHierarchy.business_line_name);
+    }
+    
+    const { data } = await query;
 
     // Fusionner les données existantes avec les "slots" vides
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
@@ -290,7 +310,10 @@ export const ContributorPilotage: React.FC = () => {
       // Création d'un placeholder local
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
-        organization_name: currentOrganization,
+        organization_name: currentOrganization!,
+        business_line_name: userHierarchy.business_line_name,
+        subsidiary_name: userHierarchy.subsidiary_name,
+        site_name: userHierarchy.site_name,
         year,
         month,
         process_code: orgInd.process_code,
@@ -319,7 +342,10 @@ export const ContributorPilotage: React.FC = () => {
         const { data: inserted, error } = await supabase
           .from('indicator_values')
           .insert({
-            organization_name: currentOrganization,
+            organization_name: currentOrganization!,
+            business_line_name: userHierarchy.business_line_name,
+            subsidiary_name: userHierarchy.subsidiary_name,
+            site_name: userHierarchy.site_name,
             year: selectedYear,
             month: selectedMonth,
             process_code: value.process_code,
@@ -593,6 +619,10 @@ export const ContributorPilotage: React.FC = () => {
             <div className="text-sm space-y-1">
               <p><strong>Email:</strong> {profile?.email}</p>
               <p><strong>Organisation:</strong> {currentOrganization}</p>
+              <p><strong>Niveau utilisateur:</strong> {profile?.organization_level}</p>
+              <p><strong>Filière:</strong> {userHierarchy.business_line_name || 'Non assigné'}</p>
+              <p><strong>Filiale:</strong> {userHierarchy.subsidiary_name || 'Non assigné'}</p>
+              <p><strong>Site:</strong> {userHierarchy.site_name || 'Non assigné'}</p>
               <p><strong>Indicateurs mappés:</strong> {organizationIndicators.length}</p>
               <p><strong>Processus groupés:</strong> {Object.keys(grouped).length}</p>
               <p><strong>Valeurs chargées:</strong> {values.length}</p>
