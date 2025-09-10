@@ -65,6 +65,38 @@ export const useAuthStore = create<AuthState>()(
             finalProfile = newProfile;
           }
 
+          // Compléter la hiérarchie si nécessaire
+          if (finalProfile) {
+            if (finalProfile.site_name && (!finalProfile.subsidiary_name || !finalProfile.business_line_name)) {
+              const { data: siteData } = await supabase
+                .from('sites')
+                .select('subsidiary_name, business_line_name')
+                .eq('name', finalProfile.site_name)
+                .single();
+              
+              if (siteData) {
+                finalProfile = {
+                  ...finalProfile,
+                  subsidiary_name: finalProfile.subsidiary_name || siteData.subsidiary_name,
+                  business_line_name: finalProfile.business_line_name || siteData.business_line_name
+                };
+              }
+            } else if (finalProfile.subsidiary_name && !finalProfile.business_line_name) {
+              const { data: subsidiaryData } = await supabase
+                .from('subsidiaries')
+                .select('business_line_name')
+                .eq('name', finalProfile.subsidiary_name)
+                .single();
+              
+              if (subsidiaryData) {
+                finalProfile = {
+                  ...finalProfile,
+                  business_line_name: subsidiaryData.business_line_name
+                };
+              }
+            }
+          }
+
           // récupération du logo
           const orgName = get().impersonatedOrganization || finalProfile?.company_name || userData?.entreprise;
           if (orgName) {
@@ -95,7 +127,40 @@ export const useAuthStore = create<AuthState>()(
           supabase.from('profiles').select('*').eq('email', email).single(),
         ]);
 
-        const orgName = profileData?.company_name || userData?.entreprise;
+        // Compléter la hiérarchie si nécessaire
+        let finalProfile = profileData;
+        if (finalProfile) {
+          if (finalProfile.site_name && (!finalProfile.subsidiary_name || !finalProfile.business_line_name)) {
+            const { data: siteData } = await supabase
+              .from('sites')
+              .select('subsidiary_name, business_line_name')
+              .eq('name', finalProfile.site_name)
+              .single();
+            
+            if (siteData) {
+              finalProfile = {
+                ...finalProfile,
+                subsidiary_name: finalProfile.subsidiary_name || siteData.subsidiary_name,
+                business_line_name: finalProfile.business_line_name || siteData.business_line_name
+              };
+            }
+          } else if (finalProfile.subsidiary_name && !finalProfile.business_line_name) {
+            const { data: subsidiaryData } = await supabase
+              .from('subsidiaries')
+              .select('business_line_name')
+              .eq('name', finalProfile.subsidiary_name)
+              .single();
+            
+            if (subsidiaryData) {
+              finalProfile = {
+                ...finalProfile,
+                business_line_name: subsidiaryData.business_line_name
+              };
+            }
+          }
+        }
+
+        const orgName = finalProfile?.company_name || userData?.entreprise;
         if (orgName) {
           const { data: org } = await supabase
             .from('organizations')
@@ -107,7 +172,7 @@ export const useAuthStore = create<AuthState>()(
           }
         }
 
-        set({ user: userData, profile: profileData, loading: false });
+        set({ user: userData, profile: finalProfile, loading: false });
       },
 
       /* --- Sign-up --- */
