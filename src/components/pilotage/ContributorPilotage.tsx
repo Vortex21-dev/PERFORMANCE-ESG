@@ -443,6 +443,10 @@ export const ContributorPilotage: React.FC = () => {
             unit: value.unit || null,
             status: 'draft',
             comment: null,
+            submitted_by: profile?.email || null,
+            validated_by: null,
+            submitted_at: null,
+            validated_at: null,
             created_at: now,
             updated_at: now,
           })
@@ -467,6 +471,7 @@ export const ContributorPilotage: React.FC = () => {
             site_key: userHierarchy.site_name || '',
             year: currentYear,
             month: currentMonth,
+            submitted_by: profile?.email || null,
           })
           .eq('id', value.id);
 

@@ -204,6 +204,7 @@ export const ValidatorPilotage: React.FC = () => {
           site_key: value.site_name || '',
           year: value.year || new Date().getFullYear(),
           month: value.month || new Date().getMonth() + 1,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', value.id);
       
