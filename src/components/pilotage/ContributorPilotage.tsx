@@ -759,7 +759,9 @@ export const ContributorPilotage: React.FC = () => {
                               v.value?.toLocaleString() ?? '-'
                             )}
                           </td>
-                          <td className="px-6 py-4 text-sm">{v.unit || ''}</td>
+                          <td className="px-6 py-4 text-sm">
+                            {v.unit || organizationIndicators.find(i => i.indicator_code === v.indicator_code)?.unit || ''}
+                          </td>
                           <td className="px-6 py-4">
                             <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(v.status)}`}>
                               {getStatusLabel(v.status)}
