@@ -99,6 +99,33 @@ export const ContributorPilotage: React.FC = () => {
     }
   }, [selectedYear, selectedMonth, currentOrganization, organizationIndicators]);
 
+  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
+  const validateHierarchy = (hierarchy: {
+    business_line_name?: string | null;
+    subsidiary_name?: string | null;
+    site_name?: string | null;
+  }) => {
+    // Si site_name est présent, subsidiary_name et business_line_name doivent l'être aussi
+    if (hierarchy.site_name && (!hierarchy.subsidiary_name || !hierarchy.business_line_name)) {
+      return {
+        business_line_name: null,
+        subsidiary_name: null,
+        site_name: null
+      };
+    }
+    
+    // Si subsidiary_name est présent, business_line_name doit l'être aussi
+    if (hierarchy.subsidiary_name && !hierarchy.business_line_name) {
+      return {
+        business_line_name: null,
+        subsidiary_name: null,
+        site_name: null
+      };
+    }
+    
+    return hierarchy;
+  };
+
   /* ----------  DATA DE BASE  ---------- */
   const fetchInitialData = async () => {
     setLoading(true);
@@ -298,6 +325,9 @@ export const ContributorPilotage: React.FC = () => {
     
     const { data } = await query;
 
+    // Valider la hiérarchie de l'utilisateur
+    const validatedHierarchy = validateHierarchy(userHierarchy);
+
     // Fusionner les données existantes avec les "slots" vides
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
@@ -311,9 +341,9 @@ export const ContributorPilotage: React.FC = () => {
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
         organization_name: currentOrganization!,
-        business_line_name: userHierarchy.business_line_name,
-        subsidiary_name: userHierarchy.subsidiary_name,
-        site_name: userHierarchy.site_name,
+        business_line_name: validatedHierarchy.business_line_name,
+        subsidiary_name: validatedHierarchy.subsidiary_name,
+        site_name: validatedHierarchy.site_name,
         year,
         month,
         process_code: orgInd.process_code,
@@ -337,15 +367,18 @@ export const ContributorPilotage: React.FC = () => {
     }
 
     try {
+      // Valider la hiérarchie avant insertion
+      const validatedHierarchy = validateHierarchy(userHierarchy);
+
       // 1) Premier enregistrement : INSERT
       if (value.id.startsWith('empty-')) {
         const { data: inserted, error } = await supabase
           .from('indicator_values')
           .insert({
             organization_name: currentOrganization!,
-            business_line_name: userHierarchy.business_line_name,
-            subsidiary_name: userHierarchy.subsidiary_name,
-            site_name: userHierarchy.site_name,
+            business_line_name: validatedHierarchy.business_line_name,
+            subsidiary_name: validatedHierarchy.subsidiary_name,
+            site_name: validatedHierarchy.site_name,
             year: selectedYear,
             month: selectedMonth,
             process_code: value.process_code,
