@@ -26,6 +26,13 @@ const modules = [
     color: 'from-blue-500 to-cyan-500',
   },
   {
+    name: 'Pilotage Énergétique',
+    description: 'Module pilotage énergétique répliqué et optimisé',
+    icon: ChartBar,
+    path: '/enterprise/pilotage-energetique',
+    color: 'from-green-500 to-blue-500',
+  },
+  {
     name: 'Gestion',
     description: 'Gérez votre configuration ESG, équipes et permissions',
     icon: Settings2,
