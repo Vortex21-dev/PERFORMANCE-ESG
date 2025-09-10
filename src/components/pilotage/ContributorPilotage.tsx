@@ -79,49 +79,6 @@ export const ContributorPilotage: React.FC = () => {
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
 
-  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
-  const validateHierarchy = (hierarchy: {
-    business_line_name?: string | null;
-    subsidiary_name?: string | null;
-    site_name?: string | null;
-  }) => {
-    if (hierarchy.site_name && (!hierarchy.subsidiary_name || !hierarchy.business_line_name)) {
-      return {
-        business_line_name: null,
-        subsidiary_name: null,
-        site_name: null
-      };
-    }
-    
-    if (hierarchy.subsidiary_name && !hierarchy.business_line_name) {
-      return {
-        business_line_name: null,
-        subsidiary_name: null,
-        site_name: null
-      };
-    }
-    
-    return hierarchy;
-  };
-
-  const rawUserHierarchy = {
-    organization_name: currentOrganization,
-    business_line_name: profile?.business_line_name || null,
-    subsidiary_name: profile?.subsidiary_name || null,
-    site_name: profile?.site_name || null
-  };
-
-  const validatedHierarchy = validateHierarchy({
-    business_line_name: rawUserHierarchy.business_line_name,
-    subsidiary_name: rawUserHierarchy.subsidiary_name,
-    site_name: rawUserHierarchy.site_name
-  });
-
-  const userHierarchy = {
-    organization_name: currentOrganization,
-    ...validatedHierarchy
-  };
-
   /* ----------  HOOKS  ---------- */
   useEffect(() => {
     if (!profile || profile.role !== 'contributor') {
@@ -150,72 +107,40 @@ export const ContributorPilotage: React.FC = () => {
   const fetchProcesses = async () => {
     const { data } = await supabase.from('processes').select('*').order('name');
     setProcesses(data || []);
-  }; 
+  };
 
   const fetchOrganizationIndicators = async () => {
-    if (!profile?.email || !currentOrganization) {
-      return;
-    }
+    if (!profile?.email || !currentOrganization) return;
 
-    const { data: userProcs, error: userError } = await supabase
+    const { data: userProcs } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile.email)
       .single();
 
-    if (userError) {
-      console.error('Error fetching user processes:', userError);
-      return;
-    }
-
     const allowedProcCodes = userProcs?.process_codes || [];
-
     if (!allowedProcCodes.length) {
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    const { data: procDetails, error: procError } = await supabase
+    const { data: procDetails } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
       .in('code', allowedProcCodes);
 
-    if (procError) {
-      console.error('Error fetching process details:', procError);
-      return;
-    }
+    const allIndicatorCodes = procDetails?.flatMap(p => p.indicator_codes || []) || [];
 
-    if (!procDetails || !procDetails.length) {
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
-
-    const allIndicatorCodes = procDetails.flatMap(p => p.indicator_codes || []);
-
-    if (!allIndicatorCodes.length) {
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
-
-    const { data: indicators, error: indError } = await supabase
+    const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
       .in('code', allIndicatorCodes);
 
-    if (indError) {
-      console.error('Error fetching indicators:', indError);
-      return;
-    }
-
     const mapped: OrganizationIndicator[] = [];
-    for (const p of procDetails) {
-      const indicatorCodes = p.indicator_codes || [];
-      
-      for (const ic of indicatorCodes) {
-        const ind = indicators?.find(i => i.code === ic || i.name === ic);
+    procDetails?.forEach(p => {
+      p.indicator_codes?.forEach((ic: string) => {
+        const ind = indicatorDetails?.find(i => i.code === ic);
         if (ind) {
           mapped.push({
             indicator_code: ind.code,
@@ -224,109 +149,23 @@ export const ContributorPilotage: React.FC = () => {
             process_code: p.code,
             process_name: p.name,
           });
-        } else {
-          const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-          
-          const { data: existingIndicator, error: checkError } = await supabase
-            .from('indicators')
-            .select('*')
-            .eq('code', placeholderCode)
-            .single();
-          
-          if (existingIndicator && !checkError) {
-            mapped.push({
-              indicator_code: existingIndicator.code,
-              indicator_name: existingIndicator.name,
-              unit: existingIndicator.unit,
-              process_code: p.code,
-              process_name: p.name,
-            });
-          } else {
-            try {
-              const { data: newIndicator, error: createError } = await supabase
-                .from('indicators')
-                .insert({
-                  code: placeholderCode,
-                  name: ic,
-                  unit: getDefaultUnit(ic),
-                  type: 'primaire',
-                  axe: 'Social',
-                  formule: 'somme',
-                  frequence: 'mensuelle'
-                })
-                .select()
-                .single();
-              
-              if (!createError && newIndicator) {
-                mapped.push({
-                  indicator_code: newIndicator.code,
-                  indicator_name: newIndicator.name,
-                  unit: newIndicator.unit,
-                  process_code: p.code,
-                  process_name: p.name,
-                });
-              } else {
-                mapped.push({
-                  indicator_code: placeholderCode,
-                  indicator_name: ic,
-                  unit: getDefaultUnit(ic),
-                  process_code: p.code,
-                  process_name: p.name,
-                });
-              }
-            } catch (error) {
-              const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-              mapped.push({
-                indicator_code: placeholderCode,
-                indicator_name: ic,
-                unit: getDefaultUnit(ic),
-                process_code: p.code,
-                process_name: p.name,
-              });
-            }
-          }
         }
-      }
-    }
+      });
+    });
 
     setOrganizationIndicators(mapped);
-    setIndicators(indicators || []);
+    setIndicators(indicatorDetails || []);
   };
 
-  const getDefaultUnit = (indicatorName: string): string => {
-    const name = indicatorName.toLowerCase();
-    
-    if (name.includes('nombre') || name.includes('total') || name.includes('effectif')) {
-      return 'nombre';
-    }
-    if (name.includes('ratio') || name.includes('taux') || name.includes('pourcentage')) {
-      return '%';
-    }
-    if (name.includes('rotation') || name.includes('turnover')) {
-      return '%';
-    }
-    if (name.includes('équité') || name.includes('equity')) {
-      return 'ratio';
-    }
-    if (name.includes('composition') || name.includes('conseil')) {
-      return '%';
-    }
-    if (name.includes('violation') || name.includes('incident')) {
-      return 'nombre';
-    }
-    
-    return 'unité';
-  };
-
-  /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
+  /* ----------  VALEURS (avec hiérarchie à jour)  ---------- */
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
 
-    const { data: userProcesses } = await supabase
+    const { data: userProcs } = await supabase
       .from('user_processes')
       .select('process_codes')
-      .eq('email', profile?.email)
+      .eq('email', profile!.email)
       .single();
 
     let query = supabase
@@ -335,23 +174,12 @@ export const ContributorPilotage: React.FC = () => {
       .eq('organization_name', currentOrganization)
       .eq('year', year)
       .eq('month', month)
-      .in('process_code', userProcesses?.process_codes || []);
-    
-    if (userHierarchy.site_name) {
-      query = query.eq('site_name', userHierarchy.site_name);
-    } else if (userHierarchy.subsidiary_name) {
-      query = query.eq('subsidiary_name', userHierarchy.subsidiary_name);
-    } else if (userHierarchy.business_line_name) {
-      query = query.eq('business_line_name', userHierarchy.business_line_name);
-    }
-    
-    const { data } = await query;
+      .in('process_code', userProcs?.process_codes ?? [])
+      .eq('business_line_name', profile?.business_line_name ?? null)
+      .eq('subsidiary_name', profile?.subsidiary_name ?? null)
+      .eq('site_name', profile?.site_name ?? null);
 
-    const hierarchyData = {
-      business_line_name: userHierarchy.business_line_name,
-      subsidiary_name: userHierarchy.subsidiary_name,
-      site_name: userHierarchy.site_name,
-    };
+    const { data } = await query;
 
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
@@ -364,9 +192,9 @@ export const ContributorPilotage: React.FC = () => {
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
         organization_name: currentOrganization!,
-        business_line_name: userHierarchy.business_line_name,
-        subsidiary_name: userHierarchy.subsidiary_name,
-        site_name: userHierarchy.site_name,
+        business_line_name: profile?.business_line_name ?? null,
+        subsidiary_name: profile?.subsidiary_name ?? null,
+        site_name: profile?.site_name ?? null,
         year,
         month,
         process_code: orgInd.process_code,
@@ -410,9 +238,9 @@ export const ContributorPilotage: React.FC = () => {
           .insert({
             organization_name: currentOrganization!,
             period_id: activePeriod?.id || null,
-            business_line_name: userHierarchy.business_line_name,
-            subsidiary_name: userHierarchy.subsidiary_name,
-            site_name: userHierarchy.site_name,
+            business_line_name: profile?.business_line_name ?? null,
+            subsidiary_name: profile?.subsidiary_name ?? null,
+            site_name: profile?.site_name ?? null,
             year: currentYear,
             month: currentMonth,
             process_code: value.process_code,
@@ -441,8 +269,9 @@ export const ContributorPilotage: React.FC = () => {
             unit: value.unit || null,
             status: 'draft',
             updated_at: now,
-            year: currentYear,
-            month: currentMonth,
+            business_line_name: profile?.business_line_name ?? null,
+            subsidiary_name: profile?.subsidiary_name ?? null,
+            site_name: profile?.site_name ?? null,
             submitted_by: profile?.email || null,
           })
           .eq('id', value.id);
@@ -716,9 +545,9 @@ export const ContributorPilotage: React.FC = () => {
               <p><strong>Email:</strong> {profile?.email}</p>
               <p><strong>Organisation:</strong> {currentOrganization}</p>
               <p><strong>Niveau utilisateur:</strong> {profile?.organization_level}</p>
-              <p><strong>Filière:</strong> {userHierarchy.business_line_name || 'Non assigné'}</p>
-              <p><strong>Filiale:</strong> {userHierarchy.subsidiary_name || 'Non assigné'}</p>
-              <p><strong>Site:</strong> {userHierarchy.site_name || 'Non assigné'}</p>
+              <p><strong>Filière:</strong> {profile?.business_line_name || 'Non assigné'}</p>
+              <p><strong>Filiale:</strong> {profile?.subsidiary_name || 'Non assigné'}</p>
+              <p><strong>Site:</strong> {profile?.site_name || 'Non assigné'}</p>
               <p><strong>Indicateurs mappés:</strong> {organizationIndicators.length}</p>
               <p><strong>Processus groupés:</strong> {Object.keys(grouped).length}</p>
               <p><strong>Valeurs chargées:</strong> {values.length}</p>
@@ -731,7 +560,7 @@ export const ContributorPilotage: React.FC = () => {
           const open = expandedProcess === processCode;
           const processName = getProcessName(processCode);
           const indicatorCount = indicators.length;
-          
+
           return (
             <div key={processCode} className="mb-6 border rounded-lg bg-white shadow-sm">
               <div
@@ -749,21 +578,11 @@ export const ContributorPilotage: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Indicateur
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Valeur
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Unité
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Statut
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Actions
-                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Indicateur</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valeur</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unité</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
