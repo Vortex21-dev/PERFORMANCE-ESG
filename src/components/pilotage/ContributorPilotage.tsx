@@ -126,6 +126,7 @@ export const ContributorPilotage: React.FC = () => {
     ...validatedHierarchy
   };
 
+  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
   /* ----------  HOOKS  ---------- */
   useEffect(() => {
     if (!profile || profile.role !== 'contributor') {
@@ -158,131 +159,73 @@ export const ContributorPilotage: React.FC = () => {
 
   const fetchOrganizationIndicators = async () => {
     if (!profile?.email || !currentOrganization) {
-      console.log('❌ Missing profile email or organization:', { email: profile?.email, org: currentOrganization });
       return;
     }
 
-    console.log('🔍 Fetching organization indicators for:', { email: profile.email, org: currentOrganization });
-
-    /* 1. Processus assignés à l'utilisateur */
-    console.log('📋 Checking user_processes table for email:', profile.email);
+    /* 1. Récupérer les processus assignés à l'utilisateur */
     const { data: userProcs, error: userError } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile.email)
       .single();
 
-    console.log('📋 User processes query result:', { data: userProcs, error: userError });
-
     if (userError) {
-      console.error('❌ Error fetching user processes:', userError);
-      console.log('❌ User processes error details:', {
-        code: userError.code,
-        message: userError.message,
-        details: userError.details
-      });
+      console.error('Error fetching user processes:', userError);
       return;
     }
 
     const allowedProcCodes = userProcs?.process_codes || [];
-    console.log('📋 User assigned processes:', allowedProcCodes);
 
     if (!allowedProcCodes.length) {
-      console.log('⚠️ No processes assigned to user');
-      console.log('💡 Checking if user exists in user_processes table...');
-      
-      // Vérifier si l'utilisateur existe dans la table user_processes
-      const { data: allUserProcesses, error: allError } = await supabase
-        .from('user_processes')
-        .select('email, process_codes');
-      
-      console.log('📊 All user_processes records:', allUserProcesses);
-      console.log('🔍 Looking for email:', profile.email);
-      
-      const userExists = allUserProcesses?.find(up => up.email === profile.email);
-      console.log('👤 User found in user_processes:', userExists);
-      
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    /* 2. Détails des processus assignés */
-    console.log('🔧 Fetching process details for codes:', allowedProcCodes);
+    /* 2. Récupérer les détails des processus assignés */
     const { data: procDetails, error: procError } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
       .in('code', allowedProcCodes);
 
-    console.log('🔧 Process details query result:', { data: procDetails, error: procError });
-
     if (procError) {
-      console.error('❌ Error fetching process details:', procError);
+      console.error('Error fetching process details:', procError);
       return;
     }
-
-    console.log('🔧 Process details found:', procDetails);
 
     if (!procDetails || !procDetails.length) {
-      console.log('⚠️ No process details found for assigned codes');
-      console.log('💡 Checking all processes in organization...');
-      
-      // Vérifier tous les processus de l'organisation
-      const { data: allOrgProcesses, error: allOrgError } = await supabase
-        .from('processes')
-        .select('code, name, organization_name')
-        .eq('organization_name', currentOrganization);
-      
-      console.log('🏢 All organization processes:', allOrgProcesses);
-      
-      // Vérifier tous les processus dans la base
-      const { data: allProcesses, error: allProcError } = await supabase
-        .from('processes')
-        .select('code, name, organization_name');
-      
-      console.log('🌍 All processes in database:', allProcesses);
-      
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    /* 3. Récupération des indicateurs */
+    /* 3. Récupérer les indicateurs associés */
     const allIndicatorCodes = procDetails.flatMap(p => p.indicator_codes || []);
-    console.log('📊 All indicator codes from processes:', allIndicatorCodes);
 
     if (!allIndicatorCodes.length) {
-      console.log('⚠️ No indicators found in assigned processes');
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    // Récupérer les indicateurs avec leurs unités depuis la table indicators
     const { data: indicators, error: indError } = await supabase
       .from('indicators')
       .select('*')
       .in('code', allIndicatorCodes);
 
     if (indError) {
-      console.error('❌ Error fetching indicators:', indError);
+      console.error('Error fetching indicators:', indError);
       return;
     }
 
-    console.log('📈 Indicators found:', indicators);
-    console.log('🔍 Indicators with units:', indicators?.map(i => ({ code: i.code, name: i.name, unit: i.unit })));
-
-    /* 4. Mapping final */
+    /* 4. Créer le mapping final */
     const mapped: OrganizationIndicator[] = [];
     for (const p of procDetails) {
       const indicatorCodes = p.indicator_codes || [];
-      console.log(`🔗 Process ${p.code} (${p.name}) has indicators:`, indicatorCodes);
       
       for (const ic of indicatorCodes) {
-        // Try to find by code first, then by name
         const ind = indicators?.find(i => i.code === ic || i.name === ic);
         if (ind) {
-          console.log(`✅ Found indicator ${ic} with unit: ${ind.unit}`);
           mapped.push({
             indicator_code: ind.code,
             indicator_name: ind.name,
@@ -291,12 +234,9 @@ export const ContributorPilotage: React.FC = () => {
             process_name: p.name,
           });
         } else {
-          console.log(`⚠️ Indicator ${ic} not found in indicators table (searched by code and name)`);
-          
-          // Check if indicator already exists before creating
+          // Créer un indicateur manquant si nécessaire
           const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
           
-          // First check if indicator with this code already exists
           const { data: existingIndicator, error: checkError } = await supabase
             .from('indicators')
             .select('*')
@@ -304,7 +244,6 @@ export const ContributorPilotage: React.FC = () => {
             .single();
           
           if (existingIndicator && !checkError) {
-            console.log(`✅ Found existing indicator: ${placeholderCode}`);
             mapped.push({
               indicator_code: existingIndicator.code,
               indicator_name: existingIndicator.name,
@@ -313,9 +252,6 @@ export const ContributorPilotage: React.FC = () => {
               process_name: p.name,
             });
           } else {
-            // Create new indicator only if it doesn't exist
-            console.log(`📝 Creating new indicator: ${placeholderCode}`);
-            
             try {
               const { data: newIndicator, error: createError } = await supabase
                 .from('indicators')
@@ -332,7 +268,6 @@ export const ContributorPilotage: React.FC = () => {
                 .single();
               
               if (!createError && newIndicator) {
-                console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
                 mapped.push({
                   indicator_code: newIndicator.code,
                   indicator_name: newIndicator.name,
@@ -341,8 +276,6 @@ export const ContributorPilotage: React.FC = () => {
                   process_name: p.name,
                 });
               } else {
-                console.log(`❌ Failed to create indicator: ${createError?.message}`);
-                // Fallback to placeholder
                 mapped.push({
                   indicator_code: placeholderCode,
                   indicator_name: ic,
@@ -352,8 +285,6 @@ export const ContributorPilotage: React.FC = () => {
                 });
               }
             } catch (error) {
-              console.error(`❌ Error processing indicator ${ic}:`, error);
-              // Fallback to placeholder
               const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
               mapped.push({
                 indicator_code: placeholderCode,
@@ -367,8 +298,6 @@ export const ContributorPilotage: React.FC = () => {
         }
       }
     }
-
-    console.log('✅ Final mapped indicators:', mapped);
 
     setOrganizationIndicators(mapped);
     setIndicators(indicators || []);
@@ -405,13 +334,14 @@ export const ContributorPilotage: React.FC = () => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
 
+    // Récupérer les processus assignés à l'utilisateur
     const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile?.email)
       .single();
 
-    // Build query with user's hierarchy
+    // Construire la requête avec la hiérarchie de l'utilisateur
     let query = supabase
       .from('indicator_values')
       .select('*')
@@ -420,7 +350,7 @@ export const ContributorPilotage: React.FC = () => {
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
     
-    // Filter by user's hierarchy level
+    // Filtrer selon le niveau hiérarchique de l'utilisateur
     if (userHierarchy.site_name) {
       query = query.eq('site_name', userHierarchy.site_name);
     } else if (userHierarchy.subsidiary_name) {
@@ -431,17 +361,14 @@ export const ContributorPilotage: React.FC = () => {
     
     const { data } = await query;
 
-    // Utiliser directement la hiérarchie de l'utilisateur
+    // Utiliser la hiérarchie validée de l'utilisateur
     const hierarchyData = {
       business_line_name: userHierarchy.business_line_name,
       subsidiary_name: userHierarchy.subsidiary_name,
       site_name: userHierarchy.site_name,
-      business_line_key: userHierarchy.business_line_name || '',
-      subsidiary_key: userHierarchy.subsidiary_name || '',
-      site_key: userHierarchy.site_name || ''
     };
 
-    // Fusionner les données existantes avec les "slots" vides
+    // Créer les entrées pour tous les indicateurs (existants + vides)
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
         v =>
@@ -450,7 +377,7 @@ export const ContributorPilotage: React.FC = () => {
       );
       if (existing) return existing;
 
-      // Création d'un placeholder local
+      // Créer une entrée vide pour les indicateurs sans valeur
       return {
         id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
         organization_name: currentOrganization!,
@@ -482,12 +409,24 @@ export const ContributorPilotage: React.FC = () => {
     try {
       const now = new Date().toISOString();
 
-      /* 1) PREMIER ENREGISTREMENT : INSERT complet */
+      /* 1. Premier enregistrement : INSERT avec hiérarchie validée */
       if (value.id.startsWith('empty-')) {
+        // Récupérer la période de collecte active
+        const { data: activePeriod } = await supabase
+          .from('collection_periods')
+          .select('id')
+          .eq('organization_name', currentOrganization!)
+          .eq('year', selectedYear)
+          .eq('period_type', 'month')
+          .eq('period_number', selectedMonth)
+          .eq('status', 'open')
+          .single();
+
         const { data: inserted, error } = await supabase
           .from('indicator_values')
           .insert({
             organization_name: currentOrganization!,
+            period_id: activePeriod?.id || null,
             business_line_name: userHierarchy.business_line_name,
             subsidiary_name: userHierarchy.subsidiary_name,
             site_name: userHierarchy.site_name,
@@ -509,7 +448,7 @@ export const ContributorPilotage: React.FC = () => {
         setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
       }
 
-      /* 2) MISE À JOUR */
+      /* 2. Mise à jour d'une valeur existante */
       else {
         const { error } = await supabase
           .from('indicator_values')
@@ -618,23 +557,13 @@ export const ContributorPilotage: React.FC = () => {
   const getIndicatorName = (c: string) => indicators.find(i => i.code === c)?.name || c;
   const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
   const getIndicatorUnit = (c: string) => {
-    console.log('🔍 Getting unit for indicator:', c);
-    console.log('📊 organizationIndicators:', organizationIndicators);
-    console.log('📈 indicators:', indicators);
-    
-    // Chercher d'abord dans organizationIndicators
     const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
-    console.log('🎯 Found orgIndicator:', orgIndicator);
     if (orgIndicator?.unit) {
-      console.log('✅ Unit from orgIndicator:', orgIndicator.unit);
       return orgIndicator.unit;
     }
     
-    // Fallback vers indicators
     const indicator = indicators.find(i => i.code === c);
-    console.log('🔄 Fallback indicator:', indicator);
     const unit = indicator?.unit || '';
-    console.log('📏 Final unit:', unit);
     return unit;
   };
 

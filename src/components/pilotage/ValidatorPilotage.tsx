@@ -220,9 +220,7 @@ export const ValidatorPilotage: React.FC = () => {
     toast.success(`${valuesToValidate.length} valeur(s) ${validationAction === 'approve' ? 'validée(s)' : 'rejetée(s)'}`);
   };
 
-  /* ---------- FILTER & GROUP ---------- */
-
-  // Génère toutes les données nécessaires (valeurs existantes + indicateurs sans valeurs)
+  /* ----------  DONNÉES COMPLÈTES  ---------- */
   const getAllRequiredData = () => {
     if (!currentOrganization || !profile?.email) return [];
 
@@ -236,7 +234,7 @@ export const ValidatorPilotage: React.FC = () => {
         return existingValue;
       }
 
-      // Créer une entrée vide avec statut 'draft' pour afficher tous les indicateurs
+      // Créer une entrée vide pour les indicateurs sans valeur
       return {
         id: `empty-${orgIndicator.process_code}-${orgIndicator.indicator_code}-${selectedYear}-${selectedMonth}`,
         organization_name: currentOrganization,
