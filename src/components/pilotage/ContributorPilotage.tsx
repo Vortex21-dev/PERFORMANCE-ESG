@@ -107,21 +107,11 @@ export const ContributorPilotage: React.FC = () => {
   };
 
   const fetchOrganizationIndicators = async () => {
-    if (!profile?.email) {
-      console.log('No profile email found');
-      return;
-    }
-
-    console.log('Fetching processes for user:', profile.email);
-    
     const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile?.email)
       .single();
-
-    console.log('User processes data:', userProcesses);
-    
     if (!userProcesses?.process_codes?.length) return;
 
     const { data: processDetails } = await supabase
@@ -129,19 +119,13 @@ export const ContributorPilotage: React.FC = () => {
       .select('code, name, indicator_codes')
       .in('code', userProcesses.process_codes);
 
-    console.log('Process details:', processDetails);
-
     const indicatorCodes = new Set<string>();
     processDetails?.forEach(p => p.indicator_codes?.forEach((c: string) => indicatorCodes.add(c)));
-
-    console.log('Indicator codes found:', Array.from(indicatorCodes));
 
     const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
       .in('code', Array.from(indicatorCodes));
-
-    console.log('Indicator details:', indicatorDetails);
 
     const mapped: OrganizationIndicator[] = [];
     processDetails?.forEach(p => {
@@ -151,8 +135,6 @@ export const ContributorPilotage: React.FC = () => {
       });
     });
 
-    console.log('Mapped organization indicators:', mapped);
-    
     setOrganizationIndicators(mapped);
     setIndicators(indicatorDetails || []);
   };
@@ -162,22 +144,11 @@ export const ContributorPilotage: React.FC = () => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
 
-    console.log('Fetching values for:', { year, month, currentOrganization, email: profile?.email });
-    
     const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile?.email)
       .single();
-
-    console.log('User processes for values fetch:', userProcesses);
-    
-    if (!userProcesses?.process_codes?.length) {
-      console.log('No process codes found for user');
-      setValues([]);
-      setLoading(false);
-      return;
-    }
 
     const { data } = await supabase
       .from('indicator_values')
@@ -186,8 +157,6 @@ export const ContributorPilotage: React.FC = () => {
       .eq('year', year)
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
-
-    console.log('Existing indicator values:', data);
 
     // Fusionner les données existantes avec les “slots” vides
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
@@ -211,8 +180,6 @@ export const ContributorPilotage: React.FC = () => {
         status: 'draft',
       };
     });
-
-    console.log('Enriched values:', enriched);
 
     setValues(enriched);
     setLoading(false);
@@ -499,20 +466,6 @@ export const ContributorPilotage: React.FC = () => {
           </div>
         )}
 
-        {/* Debug Information */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-            <h3 className="font-semibold mb-2">Debug Information:</h3>
-            <div className="text-sm space-y-1">
-              <p><strong>Current Organization:</strong> {currentOrganization}</p>
-              <p><strong>User Email:</strong> {profile?.email}</p>
-              <p><strong>Organization Indicators:</strong> {organizationIndicators.length}</p>
-              <p><strong>Total Values:</strong> {values.length}</p>
-              <p><strong>Processes:</strong> {processes.length}</p>
-              <p><strong>Selected Year/Month:</strong> {selectedYear}/{selectedMonth}</p>
-            </div>
-          </div>
-        )}
         {/* Affichage par processus */}
         {Object.entries(grouped).map(([processCode, indicators]) => {
           const open = expandedProcess === processCode;
@@ -522,15 +475,7 @@ export const ContributorPilotage: React.FC = () => {
                 onClick={() => setExpandedProcess(open ? null : processCode)}
                 className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50"
               >
-                <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-semibold">{getProcessName(processCode)}</h3>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                    {indicators.length} indicateurs
-                  </span>
-                  <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                    Code: {processCode}
-                  </span>
-                </div>
+                <h3 className="text-lg font-semibold">{getProcessName(processCode)}</h3>
                 {open ? <ChevronUp /> : <ChevronDown />}
               </div>
               {open && (
