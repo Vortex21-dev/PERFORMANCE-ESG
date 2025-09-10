@@ -78,35 +78,21 @@ export const ContributorPilotage: React.FC = () => {
   const [selectedStatCard, setSelectedStatCard] = useState<string | null>(null);
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
-  
+
   /* ----------  VALIDATION HIÉRARCHIE  ---------- */
   const validateHierarchy = (hierarchy: {
     business_line_name?: string | null;
     subsidiary_name?: string | null;
     site_name?: string | null;
   }) => {
-    // Si site_name est présent, subsidiary_name et business_line_name doivent l'être aussi
-    if (hierarchy.site_name && (!hierarchy.subsidiary_name || !hierarchy.business_line_name)) {
-      return {
-        business_line_name: null,
-        subsidiary_name: null,
-        site_name: null
-      };
-    }
-    
-    // Si subsidiary_name est présent, business_line_name doit l'être aussi
-    if (hierarchy.subsidiary_name && !hierarchy.business_line_name) {
-      return {
-        business_line_name: null,
-        subsidiary_name: null,
-        site_name: null
-      };
-    }
-    
-    return hierarchy;
+    // ✅ Conserver la hiérarchie complète
+    return {
+      business_line_name: hierarchy.business_line_name || null,
+      subsidiary_name: hierarchy.subsidiary_name || null,
+      site_name: hierarchy.site_name || null
+    };
   };
 
-  // Get user's hierarchy level from profile
   const rawUserHierarchy = {
     organization_name: currentOrganization,
     business_line_name: profile?.business_line_name || null,
@@ -114,7 +100,6 @@ export const ContributorPilotage: React.FC = () => {
     site_name: profile?.site_name || null
   };
 
-  // Validate hierarchy to ensure database constraints are met
   const validatedHierarchy = validateHierarchy({
     business_line_name: rawUserHierarchy.business_line_name,
     subsidiary_name: rawUserHierarchy.subsidiary_name,
@@ -136,7 +121,7 @@ export const ContributorPilotage: React.FC = () => {
   }, [profile, navigate]);
 
   useEffect(() => {
-    if (currentOrganization) {
+    if (currentOrganization && organizationIndicators.length) {
       fetchValues(selectedYear, selectedMonth);
     }
   }, [selectedYear, selectedMonth, currentOrganization, organizationIndicators]);
@@ -154,135 +139,48 @@ export const ContributorPilotage: React.FC = () => {
   const fetchProcesses = async () => {
     const { data } = await supabase.from('processes').select('*').order('name');
     setProcesses(data || []);
-  }; 
+  };
 
   const fetchOrganizationIndicators = async () => {
-    if (!profile?.email || !currentOrganization) {
-      console.log('❌ Missing profile email or organization:', { email: profile?.email, org: currentOrganization });
-      return;
-    }
+    if (!profile?.email || !currentOrganization) return;
 
-    console.log('🔍 Fetching organization indicators for:', { email: profile.email, org: currentOrganization });
-
-    /* 1. Processus assignés à l'utilisateur */
-    console.log('📋 Checking user_processes table for email:', profile.email);
-    const { data: userProcs, error: userError } = await supabase
+    const { data: userProcs } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile.email)
       .single();
 
-    console.log('📋 User processes query result:', { data: userProcs, error: userError });
-
-    if (userError) {
-      console.error('❌ Error fetching user processes:', userError);
-      console.log('❌ User processes error details:', {
-        code: userError.code,
-        message: userError.message,
-        details: userError.details
-      });
-      return;
-    }
-
     const allowedProcCodes = userProcs?.process_codes || [];
-    console.log('📋 User assigned processes:', allowedProcCodes);
 
     if (!allowedProcCodes.length) {
-      console.log('⚠️ No processes assigned to user');
-      console.log('💡 Checking if user exists in user_processes table...');
-      
-      // Vérifier si l'utilisateur existe dans la table user_processes
-      const { data: allUserProcesses, error: allError } = await supabase
-        .from('user_processes')
-        .select('email, process_codes');
-      
-      console.log('📊 All user_processes records:', allUserProcesses);
-      console.log('🔍 Looking for email:', profile.email);
-      
-      const userExists = allUserProcesses?.find(up => up.email === profile.email);
-      console.log('👤 User found in user_processes:', userExists);
-      
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    /* 2. Détails des processus assignés */
-    console.log('🔧 Fetching process details for codes:', allowedProcCodes);
-    const { data: procDetails, error: procError } = await supabase
+    const { data: procDetails } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
       .in('code', allowedProcCodes);
 
-    console.log('🔧 Process details query result:', { data: procDetails, error: procError });
-
-    if (procError) {
-      console.error('❌ Error fetching process details:', procError);
-      return;
-    }
-
-    console.log('🔧 Process details found:', procDetails);
-
-    if (!procDetails || !procDetails.length) {
-      console.log('⚠️ No process details found for assigned codes');
-      console.log('💡 Checking all processes in organization...');
-      
-      // Vérifier tous les processus de l'organisation
-      const { data: allOrgProcesses, error: allOrgError } = await supabase
-        .from('processes')
-        .select('code, name, organization_name')
-        .eq('organization_name', currentOrganization);
-      
-      console.log('🏢 All organization processes:', allOrgProcesses);
-      
-      // Vérifier tous les processus dans la base
-      const { data: allProcesses, error: allProcError } = await supabase
-        .from('processes')
-        .select('code, name, organization_name');
-      
-      console.log('🌍 All processes in database:', allProcesses);
-      
+    if (!procDetails?.length) {
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
-    /* 3. Récupération des indicateurs */
     const allIndicatorCodes = procDetails.flatMap(p => p.indicator_codes || []);
-    console.log('📊 All indicator codes from processes:', allIndicatorCodes);
 
-    if (!allIndicatorCodes.length) {
-      console.log('⚠️ No indicators found in assigned processes');
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
-
-    // Récupérer les indicateurs avec leurs unités depuis la table indicators
-    const { data: indicators, error: indError } = await supabase
+    const { data: indicators } = await supabase
       .from('indicators')
       .select('*')
       .in('code', allIndicatorCodes);
 
-    if (indError) {
-      console.error('❌ Error fetching indicators:', indError);
-      return;
-    }
-
-    console.log('📈 Indicators found:', indicators);
-    console.log('🔍 Indicators with units:', indicators?.map(i => ({ code: i.code, name: i.name, unit: i.unit })));
-
-    /* 4. Mapping final */
     const mapped: OrganizationIndicator[] = [];
     for (const p of procDetails) {
-      const indicatorCodes = p.indicator_codes || [];
-      console.log(`🔗 Process ${p.code} (${p.name}) has indicators:`, indicatorCodes);
-      
-      for (const ic of indicatorCodes) {
-        // Try to find by code first, then by name
+      for (const ic of p.indicator_codes || []) {
         const ind = indicators?.find(i => i.code === ic || i.name === ic);
         if (ind) {
-          console.log(`✅ Found indicator ${ic} with unit: ${ind.unit}`);
           mapped.push({
             indicator_code: ind.code,
             indicator_name: ind.name,
@@ -290,117 +188,15 @@ export const ContributorPilotage: React.FC = () => {
             process_code: p.code,
             process_name: p.name,
           });
-        } else {
-          console.log(`⚠️ Indicator ${ic} not found in indicators table (searched by code and name)`);
-          
-          // Check if indicator already exists before creating
-          const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-          
-          // First check if indicator with this code already exists
-          const { data: existingIndicator, error: checkError } = await supabase
-            .from('indicators')
-            .select('*')
-            .eq('code', placeholderCode)
-            .single();
-          
-          if (existingIndicator && !checkError) {
-            console.log(`✅ Found existing indicator: ${placeholderCode}`);
-            mapped.push({
-              indicator_code: existingIndicator.code,
-              indicator_name: existingIndicator.name,
-              unit: existingIndicator.unit,
-              process_code: p.code,
-              process_name: p.name,
-            });
-          } else {
-            // Create new indicator only if it doesn't exist
-            console.log(`📝 Creating new indicator: ${placeholderCode}`);
-            
-            try {
-              const { data: newIndicator, error: createError } = await supabase
-                .from('indicators')
-                .insert({
-                  code: placeholderCode,
-                  name: ic,
-                  unit: getDefaultUnit(ic),
-                  type: 'primaire',
-                  axe: 'Social',
-                  formule: 'somme',
-                  frequence: 'mensuelle'
-                })
-                .select()
-                .single();
-              
-              if (!createError && newIndicator) {
-                console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
-                mapped.push({
-                  indicator_code: newIndicator.code,
-                  indicator_name: newIndicator.name,
-                  unit: newIndicator.unit,
-                  process_code: p.code,
-                  process_name: p.name,
-                });
-              } else {
-                console.log(`❌ Failed to create indicator: ${createError?.message}`);
-                // Fallback to placeholder
-                mapped.push({
-                  indicator_code: placeholderCode,
-                  indicator_name: ic,
-                  unit: getDefaultUnit(ic),
-                  process_code: p.code,
-                  process_name: p.name,
-                });
-              }
-            } catch (error) {
-              console.error(`❌ Error processing indicator ${ic}:`, error);
-              // Fallback to placeholder
-              const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-              mapped.push({
-                indicator_code: placeholderCode,
-                indicator_name: ic,
-                unit: getDefaultUnit(ic),
-                process_code: p.code,
-                process_name: p.name,
-              });
-            }
-          }
         }
       }
     }
-
-    console.log('✅ Final mapped indicators:', mapped);
 
     setOrganizationIndicators(mapped);
     setIndicators(indicators || []);
   };
 
-  // Fonction pour deviner l'unité par défaut basée sur le nom de l'indicateur
-  const getDefaultUnit = (indicatorName: string): string => {
-    const name = indicatorName.toLowerCase();
-    
-    if (name.includes('nombre') || name.includes('total') || name.includes('effectif')) {
-      return 'nombre';
-    }
-    if (name.includes('ratio') || name.includes('taux') || name.includes('pourcentage')) {
-      return '%';
-    }
-    if (name.includes('rotation') || name.includes('turnover')) {
-      return '%';
-    }
-    if (name.includes('équité') || name.includes('equity')) {
-      return 'ratio';
-    }
-    if (name.includes('composition') || name.includes('conseil')) {
-      return '%';
-    }
-    if (name.includes('violation') || name.includes('incident')) {
-      return 'nombre';
-    }
-    
-    return 'unité'; // Unité par défaut
-  };
-
-  /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
+  /* ----------  VALEURS (avec hiérarchie complète)  ---------- */
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
@@ -411,7 +207,6 @@ export const ContributorPilotage: React.FC = () => {
       .eq('email', profile?.email)
       .single();
 
-    // Build query with user's hierarchy
     let query = supabase
       .from('indicator_values')
       .select('*')
@@ -419,40 +214,42 @@ export const ContributorPilotage: React.FC = () => {
       .eq('year', year)
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
-    
-    // Filter by user's hierarchy level
+
+    // ✅ Filtrer par tous les niveaux hiérarchiques
+    if (userHierarchy.business_line_name) {
+      query = query.eq('business_line_name', userHierarchy.business_line_name);
+    } else {
+      query = query.is('business_line_name', null);
+    }
+
+    if (userHierarchy.subsidiary_name) {
+      query = query.eq('subsidiary_name', userHierarchy.subsidiary_name);
+    } else {
+      query = query.is('subsidiary_name', null);
+    }
+
     if (userHierarchy.site_name) {
       query = query.eq('site_name', userHierarchy.site_name);
-    } else if (userHierarchy.subsidiary_name) {
-      query = query.eq('subsidiary_name', userHierarchy.subsidiary_name);
-    } else if (userHierarchy.business_line_name) {
-      query = query.eq('business_line_name', userHierarchy.business_line_name);
+    } else {
+      query = query.is('site_name', null);
     }
-    
+
     const { data } = await query;
 
-    // Utiliser directement la hiérarchie de l'utilisateur
-    const hierarchyData = {
-      business_line_name: userHierarchy.business_line_name,
-      subsidiary_name: userHierarchy.subsidiary_name,
-      site_name: userHierarchy.site_name,
-      business_line_key: userHierarchy.business_line_name || '',
-      subsidiary_key: userHierarchy.subsidiary_name || '',
-      site_key: userHierarchy.site_name || ''
-    };
-
-    // Fusionner les données existantes avec les "slots" vides
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
         v =>
           v.indicator_code === orgInd.indicator_code &&
-          v.process_code === orgInd.process_code
+          v.process_code === orgInd.process_code &&
+          v.business_line_name === userHierarchy.business_line_name &&
+          v.subsidiary_name === userHierarchy.subsidiary_name &&
+          v.site_name === userHierarchy.site_name
       );
+
       if (existing) return existing;
 
-      // Création d'un placeholder local
       return {
-        id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
+        id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}-${userHierarchy.business_line_name || 'null'}-${userHierarchy.subsidiary_name || 'null'}-${userHierarchy.site_name || 'null'}`,
         organization_name: currentOrganization!,
         business_line_name: userHierarchy.business_line_name,
         subsidiary_name: userHierarchy.subsidiary_name,
@@ -482,7 +279,6 @@ export const ContributorPilotage: React.FC = () => {
     try {
       const now = new Date().toISOString();
 
-      /* 1) PREMIER ENREGISTREMENT : INSERT complet */
       if (value.id.startsWith('empty-')) {
         const { data: inserted, error } = await supabase
           .from('indicator_values')
@@ -507,10 +303,7 @@ export const ContributorPilotage: React.FC = () => {
 
         if (error) throw error;
         setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
-      }
-
-      /* 2) MISE À JOUR */
-      else {
+      } else {
         const { error } = await supabase
           .from('indicator_values')
           .update({
@@ -618,24 +411,10 @@ export const ContributorPilotage: React.FC = () => {
   const getIndicatorName = (c: string) => indicators.find(i => i.code === c)?.name || c;
   const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
   const getIndicatorUnit = (c: string) => {
-    console.log('🔍 Getting unit for indicator:', c);
-    console.log('📊 organizationIndicators:', organizationIndicators);
-    console.log('📈 indicators:', indicators);
-    
-    // Chercher d'abord dans organizationIndicators
     const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
-    console.log('🎯 Found orgIndicator:', orgIndicator);
-    if (orgIndicator?.unit) {
-      console.log('✅ Unit from orgIndicator:', orgIndicator.unit);
-      return orgIndicator.unit;
-    }
-    
-    // Fallback vers indicators
+    if (orgIndicator?.unit) return orgIndicator.unit;
     const indicator = indicators.find(i => i.code === c);
-    console.log('🔄 Fallback indicator:', indicator);
-    const unit = indicator?.unit || '';
-    console.log('📏 Final unit:', unit);
-    return unit;
+    return indicator?.unit || '';
   };
 
   /* ----------  RENDER  ---------- */
@@ -790,7 +569,7 @@ export const ContributorPilotage: React.FC = () => {
           </div>
         )}
 
-        {/* Debug Panel - Only in development */}
+        {/* Debug Panel */}
         {import.meta.env.DEV && (
           <div className="mt-8 p-4 bg-gray-100 rounded-lg">
             <h3 className="font-semibold mb-2">🔧 Debug Info</h3>
@@ -813,7 +592,7 @@ export const ContributorPilotage: React.FC = () => {
           const open = expandedProcess === processCode;
           const processName = getProcessName(processCode);
           const indicatorCount = indicators.length;
-          
+
           return (
             <div key={processCode} className="mb-6 border rounded-lg bg-white shadow-sm">
               <div
@@ -831,21 +610,11 @@ export const ContributorPilotage: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Indicateur
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Valeur
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Unité
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Statut
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Actions
-                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Indicateur</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valeur</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unité</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
