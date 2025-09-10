@@ -262,11 +262,11 @@ export const ContributorPilotage: React.FC = () => {
 
     /* 4. Mapping final */
     const mapped: OrganizationIndicator[] = [];
-    procDetails.forEach(p => {
+    for (const p of procDetails) {
       const indicatorCodes = p.indicator_codes || [];
       console.log(`🔗 Process ${p.code} (${p.name}) has indicators:`, indicatorCodes);
       
-      indicatorCodes.forEach((ic: string) => {
+      for (const ic of indicatorCodes) {
         // Try to find by code first, then by name
         const ind = indicators?.find(i => i.code === ic || i.name === ic);
         if (ind) {
@@ -331,8 +331,8 @@ export const ContributorPilotage: React.FC = () => {
             });
           }
         }
-      });
-    });
+      }
+    }
 
     console.log('✅ Final mapped indicators:', mapped);
 
