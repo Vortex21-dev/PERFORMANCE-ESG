@@ -186,16 +186,32 @@ export const ValidatorPilotage: React.FC = () => {
       ? values.filter(v => v.id === selectedValueId && v.status === 'submitted')
       : values.filter(v => v.status === 'submitted');
 
+    if (valuesToValidate.length === 0) {
+      toast.error('Aucune valeur à valider');
+      return;
+    }
+
     for (const value of valuesToValidate) {
-      await supabase
+      const { error } = await supabase
         .from('indicator_values')
         .update({
           status: validationAction === 'approve' ? 'validated' : 'rejected',
           validated_by: user?.email,
           validated_at: new Date().toISOString(),
           comment: validationComment || null,
+          business_line_key: value.business_line_name || '',
+          subsidiary_key: value.subsidiary_name || '',
+          site_key: value.site_name || '',
+          year: value.year || new Date().getFullYear(),
+          month: value.month || new Date().getMonth() + 1,
         })
         .eq('id', value.id);
+      
+      if (error) {
+        console.error('Error validating value:', error);
+        toast.error(`Erreur lors de la validation: ${error.message}`);
+        return;
+      }
     }
 
     setValues(prevValues =>

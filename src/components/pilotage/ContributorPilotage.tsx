@@ -408,6 +408,8 @@ export const ContributorPilotage: React.FC = () => {
 
     try {
       const now = new Date().toISOString();
+      const currentYear = selectedYear;
+      const currentMonth = selectedMonth;
 
       /* 1. Premier enregistrement : INSERT avec hiérarchie validée */
       if (value.id.startsWith('empty-')) {
@@ -416,9 +418,9 @@ export const ContributorPilotage: React.FC = () => {
           .from('collection_periods')
           .select('id')
           .eq('organization_name', currentOrganization!)
-          .eq('year', selectedYear)
+          .eq('year', currentYear)
           .eq('period_type', 'month')
-          .eq('period_number', selectedMonth)
+          .eq('period_number', currentMonth)
           .eq('status', 'open')
           .single();
 
@@ -430,8 +432,11 @@ export const ContributorPilotage: React.FC = () => {
             business_line_name: userHierarchy.business_line_name,
             subsidiary_name: userHierarchy.subsidiary_name,
             site_name: userHierarchy.site_name,
-            year: selectedYear,
-            month: selectedMonth,
+            business_line_key: userHierarchy.business_line_name || '',
+            subsidiary_key: userHierarchy.subsidiary_name || '',
+            site_key: userHierarchy.site_name || '',
+            year: currentYear,
+            month: currentMonth,
             process_code: value.process_code,
             indicator_code: value.indicator_code,
             value: newValue,
@@ -457,6 +462,11 @@ export const ContributorPilotage: React.FC = () => {
             unit: value.unit || null,
             status: 'draft',
             updated_at: now,
+            business_line_key: userHierarchy.business_line_name || '',
+            subsidiary_key: userHierarchy.subsidiary_name || '',
+            site_key: userHierarchy.site_name || '',
+            year: currentYear,
+            month: currentMonth,
           })
           .eq('id', value.id);
 
