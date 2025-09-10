@@ -304,32 +304,45 @@ export const ContributorPilotage: React.FC = () => {
             // Create new indicator only if it doesn't exist
             console.log(`📝 Creating new indicator: ${placeholderCode}`);
             
-            const { data: newIndicator, error: createError } = await supabase
-              .from('indicators')
-              .insert({
-                code: placeholderCode,
-                name: ic,
-                unit: getDefaultUnit(ic),
-                type: 'primaire',
-                axe: 'Social',
-                formule: 'somme',
-                frequence: 'mensuelle'
-              })
-              .select()
-              .single();
-            
-            if (!createError && newIndicator) {
-              console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
-              mapped.push({
-                indicator_code: newIndicator.code,
-                indicator_name: newIndicator.name,
-                unit: newIndicator.unit,
-                process_code: p.code,
-                process_name: p.name,
-              });
-            } else {
-              console.log(`❌ Failed to create indicator: ${createError?.message}`);
+            try {
+              const { data: newIndicator, error: createError } = await supabase
+                .from('indicators')
+                .insert({
+                  code: placeholderCode,
+                  name: ic,
+                  unit: getDefaultUnit(ic),
+                  type: 'primaire',
+                  axe: 'Social',
+                  formule: 'somme',
+                  frequence: 'mensuelle'
+                })
+                .select()
+                .single();
+              
+              if (!createError && newIndicator) {
+                console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
+                mapped.push({
+                  indicator_code: newIndicator.code,
+                  indicator_name: newIndicator.name,
+                  unit: newIndicator.unit,
+                  process_code: p.code,
+                  process_name: p.name,
+                });
+              } else {
+                console.log(`❌ Failed to create indicator: ${createError?.message}`);
+                // Fallback to placeholder
+                mapped.push({
+                  indicator_code: placeholderCode,
+                  indicator_name: ic,
+                  unit: getDefaultUnit(ic),
+                  process_code: p.code,
+                  process_name: p.name,
+                });
+              }
+            } catch (error) {
+              console.error(`❌ Error processing indicator ${ic}:`, error);
               // Fallback to placeholder
+              const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
               mapped.push({
                 indicator_code: placeholderCode,
                 indicator_name: ic,
@@ -338,101 +351,6 @@ export const ContributorPilotage: React.FC = () => {
                 process_name: p.name,
               });
             }
-          }
-        }
-      } catch (error) {
-        console.error(`❌ Error processing indicator ${ic}:`, error);
-        // Fallback to placeholder
-        const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-        mapped.push({
-          indicator_code: placeholderCode,
-          indicator_name: ic,
-          unit: getDefaultUnit(ic),
-          process_code: p.code,
-          process_name: p.name,
-        });
-      }
-    }
-  }
-
-  console.log('✅ Final mapped indicators:', mapped);
-
-  setOrganizationIndicators(mapped);
-  setIndicators(indicators || []);
-};
-
-// Fonction pour deviner l'unité par défaut basée sur le nom de l'indicateur
-const getDefaultUnit = (indicatorName: string): string => {
-  const name = indicatorName.toLowerCase();
-  
-  if (name.includes('nombre') || name.includes('total') || name.includes('effectif')) {
-    return 'nombre';
-  }
-  if (name.includes('ratio') || name.includes('taux') || name.includes('pourcentage')) {
-    return '%';
-  }
-  if (name.includes('rotation') || name.includes('turnover')) {
-    return '%';
-  }
-  if (name.includes('équité') || name.includes('equity')) {
-    return 'ratio';
-  }
-  if (name.includes('composition') || name.includes('conseil')) {
-    return '%';
-  }
-  if (name.includes('violation') || name.includes('incident')) {
-    return 'nombre';
-  }
-  
-  return 'unité'; // Unité par défaut
-};
-          try {
-            const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-            const { data: newIndicator, error: createError } = await supabase
-              .from('indicators')
-              .insert({
-                code: placeholderCode,
-                name: ic,
-                unit: getDefaultUnit(ic), // Fonction pour deviner l'unité
-                type: 'primaire',
-                axe: 'Social', // Par défaut
-                formule: 'somme',
-                frequence: 'mensuelle'
-              })
-              .select()
-              .single();
-            
-            if (!createError && newIndicator) {
-              console.log(`✅ Created missing indicator: ${ic} with unit: ${newIndicator.unit}`);
-              mapped.push({
-                indicator_code: newIndicator.code,
-                indicator_name: newIndicator.name,
-                unit: newIndicator.unit,
-                process_code: p.code,
-                process_name: p.name,
-              });
-            } else {
-              console.log(`❌ Failed to create indicator: ${createError?.message}`);
-              // Fallback to placeholder
-              mapped.push({
-                indicator_code: placeholderCode,
-                indicator_name: ic,
-                unit: getDefaultUnit(ic),
-                process_code: p.code,
-                process_name: p.name,
-              });
-            }
-          } catch (error) {
-            console.error(`❌ Error creating indicator ${ic}:`, error);
-            // Fallback to placeholder
-            const placeholderCode = ic.replace(/\s+/g, '_').toUpperCase();
-            mapped.push({
-              indicator_code: placeholderCode,
-              indicator_name: ic,
-              unit: getDefaultUnit(ic),
-              process_code: p.code,
-              process_name: p.name,
-            });
           }
         }
       }
@@ -543,70 +461,70 @@ const getDefaultUnit = (indicatorName: string): string => {
 
   /* ----------  SAISIE / INSERT / UPDATE  ---------- */
   const handleValueChange = async (value: IndicatorValue, newValueStr: string) => {
-  const newValue = newValueStr === '' ? null : parseFloat(newValueStr);
-  if (newValue !== null && isNaN(newValue)) {
-    toast.error('Veuillez entrer un nombre valide');
-    return;
-  }
-
-  try {
-    const now = new Date().toISOString();
-
-    /* 1) PREMIER ENREGISTREMENT : INSERT complet */
-    if (value.id.startsWith('empty-')) {
-      const { data: inserted, error } = await supabase
-        .from('indicator_values')
-        .insert({
-          organization_name: currentOrganization!,
-          business_line_name: userHierarchy.business_line_name,
-          subsidiary_name: userHierarchy.subsidiary_name,
-          site_name: userHierarchy.site_name,
-          year: selectedYear,
-          month: selectedMonth,
-          process_code: value.process_code,
-          indicator_code: value.indicator_code,
-          value: newValue,
-          unit: value.unit || null,
-          status: 'draft',
-          comment: null,
-          created_at: now,
-          updated_at: now,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
+    const newValue = newValueStr === '' ? null : parseFloat(newValueStr);
+    if (newValue !== null && isNaN(newValue)) {
+      toast.error('Veuillez entrer un nombre valide');
+      return;
     }
 
-    /* 2) MISE À JOUR */
-    else {
-      const { error } = await supabase
-        .from('indicator_values')
-        .update({
-          value: newValue,
-          unit: value.unit || null,
-          status: 'draft',
-          updated_at: now,
-        })
-        .eq('id', value.id);
+    try {
+      const now = new Date().toISOString();
 
-      if (error) throw error;
-      setValues(prev =>
-        prev.map(v =>
-          v.id === value.id ? { ...v, value: newValue, status: 'draft' } : v
-        )
-      );
+      /* 1) PREMIER ENREGISTREMENT : INSERT complet */
+      if (value.id.startsWith('empty-')) {
+        const { data: inserted, error } = await supabase
+          .from('indicator_values')
+          .insert({
+            organization_name: currentOrganization!,
+            business_line_name: userHierarchy.business_line_name,
+            subsidiary_name: userHierarchy.subsidiary_name,
+            site_name: userHierarchy.site_name,
+            year: selectedYear,
+            month: selectedMonth,
+            process_code: value.process_code,
+            indicator_code: value.indicator_code,
+            value: newValue,
+            unit: value.unit || null,
+            status: 'draft',
+            comment: null,
+            created_at: now,
+            updated_at: now,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
+      }
+
+      /* 2) MISE À JOUR */
+      else {
+        const { error } = await supabase
+          .from('indicator_values')
+          .update({
+            value: newValue,
+            unit: value.unit || null,
+            status: 'draft',
+            updated_at: now,
+          })
+          .eq('id', value.id);
+
+        if (error) throw error;
+        setValues(prev =>
+          prev.map(v =>
+            v.id === value.id ? { ...v, value: newValue, status: 'draft' } : v
+          )
+        );
+      }
+
+      setEditingValue(null);
+      setTempValue('');
+      toast.success('Valeur mise à jour');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erreur lors de la mise à jour');
     }
-
-    setEditingValue(null);
-    setTempValue('');
-    toast.success('Valeur mise à jour');
-  } catch (err: any) {
-    console.error(err);
-    toast.error('Erreur lors de la mise à jour');
-  }
-};
+  };
 
   const handleSubmit = async () => {
     const draftValues = values.filter(v => v.status === 'draft' && v.value !== null);
