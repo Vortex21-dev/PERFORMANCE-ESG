@@ -24,9 +24,6 @@ import toast from 'react-hot-toast';
 interface IndicatorValue {
   id: string;
   organization_name: string;
-  business_line_name?: string | null;
-  subsidiary_name?: string | null;
-  site_name?: string | null;
   year: number;
   month: number;
   process_code: string;
@@ -79,38 +76,6 @@ export const ContributorPilotage: React.FC = () => {
 
   const currentOrganization = impersonatedOrganization || profile?.organization_name;
 
-  /* ----------  VALIDATION HIÉRARCHIE  ---------- */
-  const validateHierarchy = (hierarchy: {
-    business_line_name?: string | null;
-    subsidiary_name?: string | null;
-    site_name?: string | null;
-  }) => {
-    // ✅ Conserver la hiérarchie complète
-    return {
-      business_line_name: hierarchy.business_line_name || null,
-      subsidiary_name: hierarchy.subsidiary_name || null,
-      site_name: hierarchy.site_name || null
-    };
-  };
-
-  const rawUserHierarchy = {
-    organization_name: currentOrganization,
-    business_line_name: profile?.business_line_name || null,
-    subsidiary_name: profile?.subsidiary_name || null,
-    site_name: profile?.site_name || null
-  };
-
-  const validatedHierarchy = validateHierarchy({
-    business_line_name: rawUserHierarchy.business_line_name,
-    subsidiary_name: rawUserHierarchy.subsidiary_name,
-    site_name: rawUserHierarchy.site_name
-  });
-
-  const userHierarchy = {
-    organization_name: currentOrganization,
-    ...validatedHierarchy
-  };
-
   /* ----------  HOOKS  ---------- */
   useEffect(() => {
     if (!profile || profile.role !== 'contributor') {
@@ -121,7 +86,7 @@ export const ContributorPilotage: React.FC = () => {
   }, [profile, navigate]);
 
   useEffect(() => {
-    if (currentOrganization && organizationIndicators.length) {
+    if (currentOrganization) {
       fetchValues(selectedYear, selectedMonth);
     }
   }, [selectedYear, selectedMonth, currentOrganization, organizationIndicators]);
@@ -142,61 +107,39 @@ export const ContributorPilotage: React.FC = () => {
   };
 
   const fetchOrganizationIndicators = async () => {
-    if (!profile?.email || !currentOrganization) return;
-
-    const { data: userProcs } = await supabase
+    const { data: userProcesses } = await supabase
       .from('user_processes')
       .select('process_codes')
-      .eq('email', profile.email)
+      .eq('email', profile?.email)
       .single();
+    if (!userProcesses?.process_codes?.length) return;
 
-    const allowedProcCodes = userProcs?.process_codes || [];
-
-    if (!allowedProcCodes.length) {
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
-
-    const { data: procDetails } = await supabase
+    const { data: processDetails } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
-      .in('code', allowedProcCodes);
+      .in('code', userProcesses.process_codes);
 
-    if (!procDetails?.length) {
-      setOrganizationIndicators([]);
-      setIndicators([]);
-      return;
-    }
+    const indicatorCodes = new Set<string>();
+    processDetails?.forEach(p => p.indicator_codes?.forEach((c: string) => indicatorCodes.add(c)));
 
-    const allIndicatorCodes = procDetails.flatMap(p => p.indicator_codes || []);
-
-    const { data: indicators } = await supabase
+    const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
-      .in('code', allIndicatorCodes);
+      .in('code', Array.from(indicatorCodes));
 
     const mapped: OrganizationIndicator[] = [];
-    for (const p of procDetails) {
-      for (const ic of p.indicator_codes || []) {
-        const ind = indicators?.find(i => i.code === ic || i.name === ic);
-        if (ind) {
-          mapped.push({
-            indicator_code: ind.code,
-            indicator_name: ind.name,
-            unit: ind.unit,
-            process_code: p.code,
-            process_name: p.name,
-          });
-        }
-      }
-    }
+    processDetails?.forEach(p => {
+      p.indicator_codes?.forEach((ic: string) => {
+        const ind = indicatorDetails?.find(i => i.code === ic);
+        if (ind) mapped.push({ indicator_code: ind.code, indicator_name: ind.name, unit: ind.unit, process_code: p.code, process_name: p.name });
+      });
+    });
 
     setOrganizationIndicators(mapped);
-    setIndicators(indicators || []);
+    setIndicators(indicatorDetails || []);
   };
 
-  /* ----------  VALEURS (avec hiérarchie complète)  ---------- */
+  /* ----------  VALEURS (avec entrées vides dynamiques)  ---------- */
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
@@ -207,7 +150,7 @@ export const ContributorPilotage: React.FC = () => {
       .eq('email', profile?.email)
       .single();
 
-    let query = supabase
+    const { data } = await supabase
       .from('indicator_values')
       .select('*')
       .eq('organization_name', currentOrganization)
@@ -215,45 +158,19 @@ export const ContributorPilotage: React.FC = () => {
       .eq('month', month)
       .in('process_code', userProcesses?.process_codes || []);
 
-    // ✅ Filtrer par tous les niveaux hiérarchiques
-    if (userHierarchy.business_line_name) {
-      query = query.eq('business_line_name', userHierarchy.business_line_name);
-    } else {
-      query = query.is('business_line_name', null);
-    }
-
-    if (userHierarchy.subsidiary_name) {
-      query = query.eq('subsidiary_name', userHierarchy.subsidiary_name);
-    } else {
-      query = query.is('subsidiary_name', null);
-    }
-
-    if (userHierarchy.site_name) {
-      query = query.eq('site_name', userHierarchy.site_name);
-    } else {
-      query = query.is('site_name', null);
-    }
-
-    const { data } = await query;
-
+    // Fusionner les données existantes avec les “slots” vides
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
         v =>
           v.indicator_code === orgInd.indicator_code &&
-          v.process_code === orgInd.process_code &&
-          v.business_line_name === userHierarchy.business_line_name &&
-          v.subsidiary_name === userHierarchy.subsidiary_name &&
-          v.site_name === userHierarchy.site_name
+          v.process_code === orgInd.process_code
       );
-
       if (existing) return existing;
 
+      // Création d’un placeholder local
       return {
-        id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}-${userHierarchy.business_line_name || 'null'}-${userHierarchy.subsidiary_name || 'null'}-${userHierarchy.site_name || 'null'}`,
-        organization_name: currentOrganization!,
-        business_line_name: userHierarchy.business_line_name,
-        subsidiary_name: userHierarchy.subsidiary_name,
-        site_name: userHierarchy.site_name,
+        id: `empty-${orgInd.process_code}-${orgInd.indicator_code}-${year}-${month}`,
+        organization_name: currentOrganization,
         year,
         month,
         process_code: orgInd.process_code,
@@ -270,63 +187,49 @@ export const ContributorPilotage: React.FC = () => {
 
   /* ----------  SAISIE / INSERT / UPDATE  ---------- */
   const handleValueChange = async (value: IndicatorValue, newValueStr: string) => {
-    const newValue = newValueStr === '' ? null : parseFloat(newValueStr);
+    const newValue = newValueStr ? parseFloat(newValueStr) : null;
     if (newValue !== null && isNaN(newValue)) {
       toast.error('Veuillez entrer un nombre valide');
       return;
     }
 
     try {
-      const now = new Date().toISOString();
-
+      // 1) Premier enregistrement : INSERT
       if (value.id.startsWith('empty-')) {
         const { data: inserted, error } = await supabase
           .from('indicator_values')
           .insert({
-            organization_name: currentOrganization!,
-            business_line_name: userHierarchy.business_line_name,
-            subsidiary_name: userHierarchy.subsidiary_name,
-            site_name: userHierarchy.site_name,
+            organization_name: currentOrganization,
             year: selectedYear,
             month: selectedMonth,
             process_code: value.process_code,
             indicator_code: value.indicator_code,
             value: newValue,
-            unit: value.unit || null,
             status: 'draft',
-            comment: null,
-            created_at: now,
-            updated_at: now,
           })
           .select()
           .single();
-
         if (error) throw error;
+
         setValues(prev => [...prev.filter(v => v.id !== value.id), inserted]);
       } else {
+        // 2) Mise à jour simple
         const { error } = await supabase
           .from('indicator_values')
-          .update({
-            value: newValue,
-            unit: value.unit || null,
-            status: 'draft',
-            updated_at: now,
-          })
+          .update({ value: newValue, status: 'draft' })
           .eq('id', value.id);
-
         if (error) throw error;
+
         setValues(prev =>
-          prev.map(v =>
-            v.id === value.id ? { ...v, value: newValue, status: 'draft' } : v
-          )
+          prev.map(v => (v.id === value.id ? { ...v, value: newValue, status: 'draft' } : v))
         );
       }
 
       setEditingValue(null);
       setTempValue('');
       toast.success('Valeur mise à jour');
-    } catch (err: any) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       toast.error('Erreur lors de la mise à jour');
     }
   };
@@ -410,12 +313,6 @@ export const ContributorPilotage: React.FC = () => {
 
   const getIndicatorName = (c: string) => indicators.find(i => i.code === c)?.name || c;
   const getProcessName = (c: string) => processes.find(p => p.code === c)?.name || c;
-  const getIndicatorUnit = (c: string) => {
-    const orgIndicator = organizationIndicators.find(i => i.indicator_code === c);
-    if (orgIndicator?.unit) return orgIndicator.unit;
-    const indicator = indicators.find(i => i.code === c);
-    return indicator?.unit || '';
-  };
 
   /* ----------  RENDER  ---------- */
   if (loading) {
@@ -569,40 +466,16 @@ export const ContributorPilotage: React.FC = () => {
           </div>
         )}
 
-        {/* Debug Panel */}
-        {import.meta.env.DEV && (
-          <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-            <h3 className="font-semibold mb-2">🔧 Debug Info</h3>
-            <div className="text-sm space-y-1">
-              <p><strong>Email:</strong> {profile?.email}</p>
-              <p><strong>Organisation:</strong> {currentOrganization}</p>
-              <p><strong>Niveau utilisateur:</strong> {profile?.organization_level}</p>
-              <p><strong>Filière:</strong> {userHierarchy.business_line_name || 'Non assigné'}</p>
-              <p><strong>Filiale:</strong> {userHierarchy.subsidiary_name || 'Non assigné'}</p>
-              <p><strong>Site:</strong> {userHierarchy.site_name || 'Non assigné'}</p>
-              <p><strong>Indicateurs mappés:</strong> {organizationIndicators.length}</p>
-              <p><strong>Processus groupés:</strong> {Object.keys(grouped).length}</p>
-              <p><strong>Valeurs chargées:</strong> {values.length}</p>
-            </div>
-          </div>
-        )}
-
         {/* Affichage par processus */}
         {Object.entries(grouped).map(([processCode, indicators]) => {
           const open = expandedProcess === processCode;
-          const processName = getProcessName(processCode);
-          const indicatorCount = indicators.length;
-
           return (
             <div key={processCode} className="mb-6 border rounded-lg bg-white shadow-sm">
               <div
                 onClick={() => setExpandedProcess(open ? null : processCode)}
                 className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50"
               >
-                <div>
-                  <h3 className="text-lg font-semibold">{processName}</h3>
-                  <p className="text-sm text-gray-600">{indicatorCount} indicateur(s)</p>
-                </div>
+                <h3 className="text-lg font-semibold">{getProcessName(processCode)}</h3>
                 {open ? <ChevronUp /> : <ChevronDown />}
               </div>
               {open && (
@@ -610,11 +483,21 @@ export const ContributorPilotage: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Indicateur</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valeur</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unité</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Indicateur
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Valeur
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Unité
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Statut
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -651,7 +534,7 @@ export const ContributorPilotage: React.FC = () => {
                               v.value?.toLocaleString() ?? '-'
                             )}
                           </td>
-                          <td className="px-6 py-4 text-sm">{getIndicatorUnit(v.indicator_code)}</td>
+                          <td className="px-6 py-4 text-sm">{v.unit || ''}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(v.status)}`}>
                               {getStatusLabel(v.status)}
