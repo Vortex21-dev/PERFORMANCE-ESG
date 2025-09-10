@@ -115,14 +115,22 @@ export const ContributorPilotage: React.FC = () => {
     console.log('🔍 Fetching organization indicators for:', { email: profile.email, org: currentOrganization });
 
     /* 1. Processus assignés à l'utilisateur */
+    console.log('📋 Checking user_processes table for email:', profile.email);
     const { data: userProcs, error: userError } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile.email)
       .single();
 
+    console.log('📋 User processes query result:', { data: userProcs, error: userError });
+
     if (userError) {
       console.error('❌ Error fetching user processes:', userError);
+      console.log('❌ User processes error details:', {
+        code: userError.code,
+        message: userError.message,
+        details: userError.details
+      });
       return;
     }
 
@@ -131,16 +139,32 @@ export const ContributorPilotage: React.FC = () => {
 
     if (!allowedProcCodes.length) {
       console.log('⚠️ No processes assigned to user');
+      console.log('💡 Checking if user exists in user_processes table...');
+      
+      // Vérifier si l'utilisateur existe dans la table user_processes
+      const { data: allUserProcesses, error: allError } = await supabase
+        .from('user_processes')
+        .select('email, process_codes');
+      
+      console.log('📊 All user_processes records:', allUserProcesses);
+      console.log('🔍 Looking for email:', profile.email);
+      
+      const userExists = allUserProcesses?.find(up => up.email === profile.email);
+      console.log('👤 User found in user_processes:', userExists);
+      
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
     }
 
     /* 2. Détails des processus assignés */
+    console.log('🔧 Fetching process details for codes:', allowedProcCodes);
     const { data: procDetails, error: procError } = await supabase
       .from('processes')
       .select('code, name, indicator_codes')
       .in('code', allowedProcCodes);
+
+    console.log('🔧 Process details query result:', { data: procDetails, error: procError });
 
     if (procError) {
       console.error('❌ Error fetching process details:', procError);
@@ -151,6 +175,23 @@ export const ContributorPilotage: React.FC = () => {
 
     if (!procDetails || !procDetails.length) {
       console.log('⚠️ No process details found for assigned codes');
+      console.log('💡 Checking all processes in organization...');
+      
+      // Vérifier tous les processus de l'organisation
+      const { data: allOrgProcesses, error: allOrgError } = await supabase
+        .from('processes')
+        .select('code, name, organization_name')
+        .eq('organization_name', currentOrganization);
+      
+      console.log('🏢 All organization processes:', allOrgProcesses);
+      
+      // Vérifier tous les processus dans la base
+      const { data: allProcesses, error: allProcError } = await supabase
+        .from('processes')
+        .select('code, name, organization_name');
+      
+      console.log('🌍 All processes in database:', allProcesses);
+      
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
