@@ -65,6 +65,14 @@ const ProcessStepIndicators: React.FC = () => {
       
       if (selectedSubsector) {
         console.log('📊 Using subsector path for indicators');
+        
+        // Debug: Check what data exists in the table
+        const { data: allSubsectorData, error: debugError } = await supabase
+          .from('subsector_standards_issues_criteria_indicators')
+          .select('*');
+        
+        console.log('🔍 All subsector data in table:', allSubsectorData);
+        
         const { data: subsectorData, error: subsectorError } = await supabase
           .from('subsector_standards_issues_criteria_indicators')
           .select('criteria_name, indicator_codes, unit')
@@ -94,6 +102,22 @@ const ProcessStepIndicators: React.FC = () => {
         }
       } else {
         console.log('📊 Using sector path for indicators');
+        
+        // Debug: Check what data exists in the table
+        const { data: allSectorData, error: debugError2 } = await supabase
+          .from('sector_standards_issues_criteria_indicators')
+          .select('*');
+        
+        console.log('🔍 All sector data in table:', allSectorData);
+        console.log('🔍 Looking for sector:', selectedSector);
+        console.log('🔍 Looking for standards:', selectedStandards);
+        console.log('🔍 Looking for issues:', selectedIssues);
+        console.log('🔍 Looking for criteria:', selectedCriteria);
+        
+        // Try a more flexible query approach
+        let sectorData = [];
+        
+        // First try exact match
         const { data: sectorData, error: sectorError } = await supabase
           .from('sector_standards_issues_criteria_indicators')
           .select('criteria_name, indicator_codes, unit')
@@ -102,8 +126,32 @@ const ProcessStepIndicators: React.FC = () => {
           .in('issue_name', selectedIssues)
           .in('criteria_name', selectedCriteria);
 
-        if (sectorError) throw sectorError;
-        console.log('📈 Sector data found:', sectorData);
+        if (sectorError) {
+          console.error('❌ Sector query error:', sectorError);
+          throw sectorError;
+        }
+        
+        console.log('📈 Sector data found with exact match:', sectorData);
+        
+        // If no data found with exact match, try broader queries
+        if (!sectorData || sectorData.length === 0) {
+          console.log('🔍 No exact match found, trying broader queries...');
+          
+          // Try without criteria filter
+          const { data: broaderData, error: broaderError } = await supabase
+            .from('sector_standards_issues_criteria_indicators')
+            .select('criteria_name, indicator_codes, unit')
+            .eq('sector_name', selectedSector)
+            .in('standard_name', selectedStandards)
+            .in('issue_name', selectedIssues);
+          
+          if (!broaderError && broaderData) {
+            console.log('📈 Broader sector data found:', broaderData);
+            // Filter by selected criteria manually
+            sectorData = broaderData.filter(row => selectedCriteria.includes(row.criteria_name));
+            console.log('📈 Filtered sector data:', sectorData);
+          }
+        }
         
         for (const row of sectorData || []) {
           if (row.indicator_codes && row.indicator_codes.length > 0) {
