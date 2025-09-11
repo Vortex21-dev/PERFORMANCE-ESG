@@ -31,10 +31,34 @@ interface Process {
   name: string;
 }
 
+interface BusinessLine {
+  name: string;
+  organization_name: string;
+  description?: string;
+}
+
+interface Subsidiary {
+  name: string;
+  organization_name: string;
+  business_line_name?: string;
+  description?: string;
+}
+
+interface Site {
+  name: string;
+  organization_name: string;
+  business_line_name?: string;
+  subsidiary_name?: string;
+  description?: string;
+}
+
 export const UsersManagement: React.FC = () => {
   const { profile, impersonatedOrganization } = useAuthStore();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [allProcesses, setAllProcesses] = useState<Process[]>([]);
+  const [businessLines, setBusinessLines] = useState<BusinessLine[]>([]);
+  const [subsidiaries, setSubsidiaries] = useState<Subsidiary[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -57,6 +81,7 @@ export const UsersManagement: React.FC = () => {
     if (!currentOrg) return;
     fetchUsers();
     fetchProcesses();
+    fetchHierarchyData();
   }, [currentOrg]);
 
   const fetchUsers = async () => {
@@ -114,11 +139,54 @@ export const UsersManagement: React.FC = () => {
     setAllProcesses(data || []);
   };
 
+  const fetchHierarchyData = async () => {
+    if (!currentOrg) return;
+
+    try {
+      // Fetch business lines
+      const { data: businessLinesData, error: businessLinesError } = await supabase
+        .from('business_lines')
+        .select('*')
+        .eq('organization_name', currentOrg)
+        .order('name');
+
+      if (businessLinesError) throw businessLinesError;
+      setBusinessLines(businessLinesData || []);
+
+      // Fetch subsidiaries
+      const { data: subsidiariesData, error: subsidiariesError } = await supabase
+        .from('subsidiaries')
+        .select('*')
+        .eq('organization_name', currentOrg)
+        .order('name');
+
+      if (subsidiariesError) throw subsidiariesError;
+      setSubsidiaries(subsidiariesData || []);
+
+      // Fetch sites
+      const { data: sitesData, error: sitesError } = await supabase
+        .from('sites')
+        .select('*')
+        .eq('organization_name', currentOrg)
+        .order('name');
+
+      if (sitesError) throw sitesError;
+      setSites(sitesData || []);
+    } catch (error) {
+      console.error('Error fetching hierarchy data:', error);
+      toast.error('Erreur lors du chargement des données hiérarchiques');
+    }
+  };
+
   /* ------------------------------------------
      Modal
   ------------------------------------------ */
   const openModal = (user?: UserProfile) => {
-    setEditingUser(user || { role: 'contributor' });
+    setEditingUser(user || { 
+      role: 'contributor',
+      organization_name: currentOrg,
+      organization_level: 'organization'
+    });
     setUserProcesses(user?.processes || []);
     setShowModal(true);
   };
@@ -151,7 +219,10 @@ export const UsersManagement: React.FC = () => {
         email: editingUser.email,
         role: editingUser.role!,
         organization_name: currentOrg,
-        organization_level: editingUser.organization_level || null,
+        organization_level: editingUser.organization_level || 'organization',
+        business_line_name: editingUser.business_line_name || null,
+        subsidiary_name: editingUser.subsidiary_name || null,
+        site_name: editingUser.site_name || null
       });
 
       // 4. Upsert user_processes
@@ -336,6 +407,105 @@ export const UsersManagement: React.FC = () => {
                     </option>
                   ))}
                 </select>
+
+                {/* Niveau organisationnel */}
+                <select
+                  value={editingUser.organization_level || 'organization'}
+                  onChange={(e) =>
+                    setEditingUser({
+                      ...editingUser,
+                      organization_level: e.target.value,
+                      // Reset dependent fields when level changes
+                      business_line_name: e.target.value === 'organization' ? undefined : editingUser.business_line_name,
+                      subsidiary_name: ['organization', 'business_line'].includes(e.target.value) ? undefined : editingUser.subsidiary_name,
+                      site_name: e.target.value !== 'site' ? undefined : editingUser.site_name
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="organization">Organisation</option>
+                  <option value="business_line">Filière</option>
+                  <option value="subsidiary">Filiale</option>
+                  <option value="site">Site</option>
+                </select>
+
+                {/* Filière */}
+                {editingUser.organization_level && ['business_line', 'subsidiary', 'site'].includes(editingUser.organization_level) && (
+                  <select
+                    value={editingUser.business_line_name || ''}
+                    onChange={(e) =>
+                      setEditingUser({
+                        ...editingUser,
+                        business_line_name: e.target.value || undefined,
+                        // Reset dependent fields
+                        subsidiary_name: editingUser.organization_level === 'business_line' ? undefined : editingUser.subsidiary_name,
+                        site_name: editingUser.organization_level !== 'site' ? undefined : editingUser.site_name
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Sélectionner une filière</option>
+                    {businessLines.map((bl) => (
+                      <option key={bl.name} value={bl.name}>
+                        {bl.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Filiale */}
+                {editingUser.organization_level && ['subsidiary', 'site'].includes(editingUser.organization_level) && (
+                  <select
+                    value={editingUser.subsidiary_name || ''}
+                    onChange={(e) =>
+                      setEditingUser({
+                        ...editingUser,
+                        subsidiary_name: e.target.value || undefined,
+                        // Reset site if subsidiary changes
+                        site_name: editingUser.organization_level !== 'site' ? undefined : editingUser.site_name
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Sélectionner une filiale</option>
+                    {subsidiaries
+                      .filter(sub => 
+                        !editingUser.business_line_name || 
+                        sub.business_line_name === editingUser.business_line_name
+                      )
+                      .map((sub) => (
+                        <option key={sub.name} value={sub.name}>
+                          {sub.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+
+                {/* Site */}
+                {editingUser.organization_level === 'site' && (
+                  <select
+                    value={editingUser.site_name || ''}
+                    onChange={(e) =>
+                      setEditingUser({
+                        ...editingUser,
+                        site_name: e.target.value || undefined
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Sélectionner un site</option>
+                    {sites
+                      .filter(site => 
+                        (!editingUser.business_line_name || site.business_line_name === editingUser.business_line_name) &&
+                        (!editingUser.subsidiary_name || site.subsidiary_name === editingUser.subsidiary_name)
+                      )
+                      .map((site) => (
+                        <option key={site.name} value={site.name}>
+                          {site.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
 
                 {/* Attribution des processus */}
                 <div>
