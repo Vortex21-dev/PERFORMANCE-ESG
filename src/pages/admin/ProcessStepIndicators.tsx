@@ -19,6 +19,9 @@ interface SimilarityAlert {
   onConfirm: () => void;
 }
 
+interface IndicatorWithCode extends Indicator {
+  code: string;
+}
 const ProcessStepIndicators: React.FC = () => {
   const { 
     selectedCriteria, 
@@ -31,12 +34,12 @@ const ProcessStepIndicators: React.FC = () => {
     selectedStandards
   } = useAppContext();
   const navigate = useNavigate();
-  const [indicators, setIndicators] = useState<Indicator[]>([]);
+  const [indicators, setIndicators] = useState<IndicatorWithCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [similarityAlert, setSimilarityAlert] = useState<SimilarityAlert | null>(null);
-  const [indicatorsCriteriaMap, setIndicatorsCriteriaMap] = useState<{ indicator: Indicator; criteria: string }[]>([]);
+  const [indicatorsCriteriaMap, setIndicatorsCriteriaMap] = useState<{ indicator: IndicatorWithCode; criteria: string }[]>([]);
   
   useEffect(() => {
     if (!selectedCriteria.length) {
@@ -53,9 +56,15 @@ const ProcessStepIndicators: React.FC = () => {
 
   async function fetchIndicators() {
     try {
-      let indicatorsWithCriteria: { indicator: Indicator; criteria: string }[] = [];
+      console.log('🔍 Fetching indicators for criteria:', selectedCriteria);
+      console.log('📋 Selected issues:', selectedIssues);
+      console.log('🏢 Selected standards:', selectedStandards);
+      console.log('🎯 Sector/Subsector:', selectedSector, selectedSubsector);
+
+      let indicatorsWithCriteria: { indicator: IndicatorWithCode; criteria: string }[] = [];
       
       if (selectedSubsector) {
+        console.log('📊 Using subsector path for indicators');
         const { data: subsectorData, error: subsectorError } = await supabase
           .from('subsector_standards_issues_criteria_indicators')
           .select('criteria_name, indicator_codes, unit')
@@ -65,15 +74,18 @@ const ProcessStepIndicators: React.FC = () => {
           .in('criteria_name', selectedCriteria);
 
         if (subsectorError) throw subsectorError;
+        console.log('📈 Subsector data found:', subsectorData);
         
         for (const row of subsectorData || []) {
           if (row.indicator_codes && row.indicator_codes.length > 0) {
+            console.log(`🔗 Processing criteria "${row.criteria_name}" with ${row.indicator_codes.length} indicators`);
             const { data: indicators, error: indicatorError } = await supabase
               .from('indicators')
               .select('*')
               .in('code', row.indicator_codes);
             
             if (indicatorError) throw indicatorError;
+            console.log('📊 Indicators fetched:', indicators);
             
             indicators?.forEach(indicator => {
               indicatorsWithCriteria.push({ indicator, criteria: row.criteria_name });
@@ -81,6 +93,7 @@ const ProcessStepIndicators: React.FC = () => {
           }
         }
       } else {
+        console.log('📊 Using sector path for indicators');
         const { data: sectorData, error: sectorError } = await supabase
           .from('sector_standards_issues_criteria_indicators')
           .select('criteria_name, indicator_codes, unit')
@@ -90,15 +103,17 @@ const ProcessStepIndicators: React.FC = () => {
           .in('criteria_name', selectedCriteria);
 
         if (sectorError) throw sectorError;
+        console.log('📈 Sector data found:', sectorData);
         
-        for (const row of sectorData || []) {
           if (row.indicator_codes && row.indicator_codes.length > 0) {
+            console.log(`🔗 Processing criteria "${row.criteria_name}" with ${row.indicator_codes.length} indicators`);
             const { data: indicators, error: indicatorError } = await supabase
               .from('indicators')
               .select('*')
               .in('code', row.indicator_codes);
             
             if (indicatorError) throw indicatorError;
+            console.log('📊 Indicators fetched:', indicators);
             
             indicators?.forEach(indicator => {
               indicatorsWithCriteria.push({ indicator, criteria: row.criteria_name });
@@ -107,10 +122,12 @@ const ProcessStepIndicators: React.FC = () => {
         }
       }
 
+      console.log('🎯 Total indicators with criteria mapped:', indicatorsWithCriteria.length);
       setIndicators(indicatorsWithCriteria.map(item => item.indicator));
       setIndicatorsCriteriaMap(indicatorsWithCriteria);
       setError(null);
     } catch (err) {
+      console.error('❌ Error fetching indicators:', err);
       setError('Erreur lors du chargement des indicateurs');
       console.error('Error:', err);
     } finally {
@@ -215,6 +232,7 @@ const ProcessStepIndicators: React.FC = () => {
       }
     });
     
+    console.log('🗂️ Grouped indicators:', groups);
     return groups;
   }, [indicatorsCriteriaMap, selectedCriteria]);
 
@@ -226,6 +244,16 @@ const ProcessStepIndicators: React.FC = () => {
     );
   }
 
+  // Debug info in development
+  if (import.meta.env.DEV) {
+    console.log('🔧 DEBUG INFO:');
+    console.log('Selected criteria:', selectedCriteria);
+    console.log('Selected issues:', selectedIssues);
+    console.log('Selected standards:', selectedStandards);
+    console.log('Indicators loaded:', indicators.length);
+    console.log('Indicators criteria map:', indicatorsCriteriaMap.length);
+    console.log('Grouped indicators keys:', Object.keys(groupedIndicators));
+  }
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-7xl mx-auto">
@@ -243,6 +271,21 @@ const ProcessStepIndicators: React.FC = () => {
 
         <SelectionSummary />
 
+        {/* Debug Panel - Only in development */}
+        {import.meta.env.DEV && (
+          <div className="mb-6 p-4 bg-gray-100 rounded-lg">
+            <h3 className="font-semibold mb-2">🔧 Debug Info</h3>
+            <div className="text-sm space-y-1">
+              <p><strong>Critères sélectionnés:</strong> {selectedCriteria.length}</p>
+              <p><strong>Enjeux sélectionnés:</strong> {selectedIssues.length}</p>
+              <p><strong>Normes sélectionnées:</strong> {selectedStandards.length}</p>
+              <p><strong>Indicateurs chargés:</strong> {indicators.length}</p>
+              <p><strong>Mapping critères-indicateurs:</strong> {indicatorsCriteriaMap.length}</p>
+              <p><strong>Groupes de critères:</strong> {Object.keys(groupedIndicators).length}</p>
+              <p><strong>Secteur/Sous-secteur:</strong> {selectedSector} / {selectedSubsector || 'Aucun'}</p>
+            </div>
+          </div>
+        )}
         <div className="mb-8">
           {showAddForm ? (
             <AddForm
@@ -300,7 +343,9 @@ const ProcessStepIndicators: React.FC = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-base text-gray-900 leading-tight">{indicator.name}</h4>
-                            <p className="text-sm text-gray-600 mt-2 leading-relaxed">{indicator.description}</p>
+                            {indicator.description && (
+                              <p className="text-sm text-gray-600 mt-2 leading-relaxed">{indicator.description}</p>
+                            )}
                           </div>
                           {selectedIndicators.includes(indicator.name) && (
                             <div className="flex-shrink-0">
@@ -352,6 +397,21 @@ const ProcessStepIndicators: React.FC = () => {
           ))}
         </div>
 
+        {/* No data message */}
+        {Object.keys(groupedIndicators).length === 0 && !loading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+            <BarChart3 className="h-12 w-12 text-blue-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-blue-900 mb-2">Aucun indicateur trouvé</h3>
+            <p className="text-blue-700 mb-4">
+              Aucun indicateur n'a été trouvé pour les critères sélectionnés.
+            </p>
+            <div className="text-sm text-blue-600 space-y-1">
+              <p>• Vérifiez que les critères sont bien liés aux enjeux et normes</p>
+              <p>• Assurez-vous que les indicateurs existent dans la base de données</p>
+              <p>• Utilisez le bouton "Ajouter un indicateur" pour créer de nouveaux indicateurs</p>
+            </div>
+          </div>
+        )}
         {selectedIndicators.length === 0 && (
           <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-md p-4 my-8">
             <p className="text-sm">
