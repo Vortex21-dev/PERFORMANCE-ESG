@@ -61,6 +61,26 @@ interface UserProfile {
   updated_at: string;
 }
 
+interface BusinessLine {
+  name: string;
+  organization_name: string;
+  description?: string;
+}
+
+interface Subsidiary {
+  name: string;
+  organization_name: string;
+  business_line_name?: string;
+  description?: string;
+}
+
+interface Site {
+  name: string;
+  organization_name: string;
+  business_line_name?: string;
+  subsidiary_name?: string;
+  description?: string;
+}
 interface Process {
   code: string;
   name: string;
@@ -73,6 +93,9 @@ export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'organizations' | 'users'>('overview');
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [businessLines, setBusinessLines] = useState<BusinessLine[]>([]);
+  const [subsidiaries, setSubsidiaries] = useState<Subsidiary[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,6 +173,32 @@ const fetchData = async () => {
     if (processesError) throw processesError;
     setProcesses(processesData || []);
 
+    // 4. Business Lines
+    const { data: businessLinesData, error: businessLinesError } = await supabase
+      .from('business_lines')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (businessLinesError) throw businessLinesError;
+    setBusinessLines(businessLinesData || []);
+
+    // 5. Subsidiaries
+    const { data: subsidiariesData, error: subsidiariesError } = await supabase
+      .from('subsidiaries')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (subsidiariesError) throw subsidiariesError;
+    setSubsidiaries(subsidiariesData || []);
+
+    // 6. Sites
+    const { data: sitesData, error: sitesError } = await supabase
+      .from('sites')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (sitesError) throw sitesError;
+    setSites(sitesData || []);
   } catch (error) {
     console.error('Error fetching data:', error);
     toast.error('Erreur lors du chargement des données');
@@ -947,6 +996,57 @@ const handleSaveUser = async () => {
                           ]}
                         />
 
+                        {/* Filière */}
+                        {editingUser.organization_name && (
+                          <FormSelect
+                            label="Filière"
+                            value={editingUser.business_line_name || ''}
+                            onChange={(value) => setEditingUser({ ...editingUser, business_line_name: value })}
+                            options={[
+                              { value: '', label: 'Aucune filière' },
+                              ...businessLines
+                                .filter(bl => bl.organization_name === editingUser.organization_name)
+                                .map(bl => ({ value: bl.name, label: bl.name }))
+                            ]}
+                          />
+                        )}
+
+                        {/* Filiale */}
+                        {editingUser.organization_name && (
+                          <FormSelect
+                            label="Filiale"
+                            value={editingUser.subsidiary_name || ''}
+                            onChange={(value) => setEditingUser({ ...editingUser, subsidiary_name: value })}
+                            options={[
+                              { value: '', label: 'Aucune filiale' },
+                              ...subsidiaries
+                                .filter(sub => 
+                                  sub.organization_name === editingUser.organization_name &&
+                                  (!editingUser.business_line_name || sub.business_line_name === editingUser.business_line_name)
+                                )
+                                .map(sub => ({ value: sub.name, label: sub.name }))
+                            ]}
+                          />
+                        )}
+
+                        {/* Site */}
+                        {editingUser.organization_name && (
+                          <FormSelect
+                            label="Site"
+                            value={editingUser.site_name || ''}
+                            onChange={(value) => setEditingUser({ ...editingUser, site_name: value })}
+                            options={[
+                              { value: '', label: 'Aucun site' },
+                              ...sites
+                                .filter(site => 
+                                  site.organization_name === editingUser.organization_name &&
+                                  (!editingUser.business_line_name || site.business_line_name === editingUser.business_line_name) &&
+                                  (!editingUser.subsidiary_name || site.subsidiary_name === editingUser.subsidiary_name)
+                                )
+                                .map(site => ({ value: site.name, label: site.name }))
+                            ]}
+                          />
+                        )}
                         {/* Process Assignment */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
