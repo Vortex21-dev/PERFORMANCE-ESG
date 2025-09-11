@@ -135,6 +135,7 @@ const ProcessStepIndicators: React.FC = () => {
         console.log('📈 Sector data found with exact match:', sectorData);
         
         // If no data found with exact match, try broader queries
+        if (sectorData.length === 0) {
           console.log('🔍 No exact match found, trying broader queries...');
           
           // Try without criteria filter
