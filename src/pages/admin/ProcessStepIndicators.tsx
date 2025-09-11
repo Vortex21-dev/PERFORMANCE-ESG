@@ -118,7 +118,7 @@ const ProcessStepIndicators: React.FC = () => {
         let sectorData = [];
         
         // First try exact match
-        const { data: sectorData, error: sectorError } = await supabase
+        const { data: exactMatchResult, error: sectorError } = await supabase
           .from('sector_standards_issues_criteria_indicators')
           .select('criteria_name, indicator_codes, unit')
           .eq('sector_name', selectedSector)
@@ -131,10 +131,10 @@ const ProcessStepIndicators: React.FC = () => {
           throw sectorError;
         }
         
+        sectorData = exactMatchResult || [];
         console.log('📈 Sector data found with exact match:', sectorData);
         
         // If no data found with exact match, try broader queries
-        if (!sectorData || sectorData.length === 0) {
           console.log('🔍 No exact match found, trying broader queries...');
           
           // Try without criteria filter
