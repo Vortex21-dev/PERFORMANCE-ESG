@@ -4,56 +4,30 @@ import { CollectionPeriod, IndicatorValue, ValueHistory } from '../types/collect
 import toast from 'react-hot-toast';
 
 interface CollectionStore {
-  periods: CollectionPeriod[];
   values: IndicatorValue[];
   history: ValueHistory[];
   loading: boolean;
-  selectedPeriod: string | null;
-  fetchPeriods: (organizationName: string) => Promise<void>;
-  fetchValues: (periodId: string) => Promise<void>;
+  fetchValues: (organizationName: string, year: number, month: number) => Promise<void>;
   fetchHistory: (valueId: string) => Promise<void>;
   updateValue: (value: Partial<IndicatorValue> & { id: string }) => Promise<void>;
   submitValues: (valueIds: string[]) => Promise<void>;
   validateValues: (valueIds: string[], approved: boolean, comment?: string) => Promise<void>;
-  setSelectedPeriod: (periodId: string | null) => void;
 }
 
 export const useCollectionStore = create<CollectionStore>((set, get) => ({
-  periods: [],
   values: [],
   history: [],
   loading: false,
-  selectedPeriod: null,
 
-  setSelectedPeriod: (periodId) => set({ selectedPeriod: periodId }),
-
-  fetchPeriods: async (organizationName) => {
-    try {
-      set({ loading: true });
-      const { data, error } = await supabase
-        .from('collection_periods')
-        .select('*')
-        .eq('organization_name', organizationName)
-        .order('year', { ascending: false })
-        .order('period_number', { ascending: false });
-
-      if (error) throw error;
-      set({ periods: data || [] });
-    } catch (err) {
-      console.error('Error fetching periods:', err);
-      toast.error('Erreur lors du chargement des périodes');
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  fetchValues: async (periodId) => {
+  fetchValues: async (organizationName, year, month) => {
     try {
       set({ loading: true });
       const { data, error } = await supabase
         .from('indicator_values')
         .select('*')
-        .eq('period_id', periodId);
+        .eq('organization_name', organizationName)
+        .eq('year', year)
+        .eq('month', month);
 
       if (error) throw error;
       set({ values: data || [] });

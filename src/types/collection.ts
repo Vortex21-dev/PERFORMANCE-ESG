@@ -11,7 +11,6 @@ export interface CollectionPeriod {
 
 export interface IndicatorValue {
   id: string;
-  period_id: string;
   organization_name: string;
   business_line_key?: string;
   subsidiary_key?: string;
@@ -25,6 +24,8 @@ export interface IndicatorValue {
   submitted_at?: string;
   validated_by?: string;
   validated_at?: string;
+  year: number;
+  month: number;
 }
 
 export interface ValueHistory {

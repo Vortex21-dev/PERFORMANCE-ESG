@@ -219,21 +219,10 @@ export const ContributorPilotage: React.FC = () => {
       const currentMonth = selectedMonth;
 
       if (value.id.startsWith('empty-')) {
-        const { data: activePeriod } = await supabase
-          .from('collection_periods')
-          .select('id')
-          .eq('organization_name', currentOrganization!)
-          .eq('year', currentYear)
-          .eq('period_type', 'month')
-          .eq('period_number', currentMonth)
-          .eq('status', 'open')
-          .maybeSingle();
-
         const { data: inserted, error } = await supabase
           .from('indicator_values')
           .insert({
             organization_name: currentOrganization!,
-            period_id: activePeriod?.id || null,
 
             /* =====  HIÉRARCHIE UTILISATEUR  ===== */
             business_line_name: profile?.business_line_name ?? null,
