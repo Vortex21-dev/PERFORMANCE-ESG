@@ -105,6 +105,7 @@ const ProcessStepIndicators: React.FC = () => {
         if (sectorError) throw sectorError;
         console.log('📈 Sector data found:', sectorData);
         
+        for (const row of sectorData || []) {
           if (row.indicator_codes && row.indicator_codes.length > 0) {
             console.log(`🔗 Processing criteria "${row.criteria_name}" with ${row.indicator_codes.length} indicators`);
             const { data: indicators, error: indicatorError } = await supabase
