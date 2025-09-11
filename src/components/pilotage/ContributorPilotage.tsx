@@ -112,14 +112,19 @@ export const ContributorPilotage: React.FC = () => {
   const fetchOrganizationIndicators = async () => {
     if (!profile?.email || !currentOrganization) return;
 
+    console.log('🔍 Fetching organization indicators for:', { email: profile.email, org: currentOrganization });
+
     const { data: userProcs } = await supabase
       .from('user_processes')
       .select('process_codes')
       .eq('email', profile.email)
       .single();
 
+    console.log('👤 User processes:', userProcs);
+
     const allowedProcCodes = userProcs?.process_codes || [];
     if (!allowedProcCodes.length) {
+      console.log('⚠️ No processes assigned to user');
       setOrganizationIndicators([]);
       setIndicators([]);
       return;
@@ -130,12 +135,17 @@ export const ContributorPilotage: React.FC = () => {
       .select('code, name, indicator_codes')
       .in('code', allowedProcCodes);
 
+    console.log('📋 Process details:', procDetails);
+
     const allIndicatorCodes = procDetails?.flatMap(p => p.indicator_codes || []) || [];
+    console.log('🏷️ All indicator codes:', allIndicatorCodes);
 
     const { data: indicatorDetails } = await supabase
       .from('indicators')
       .select('*')
       .in('code', allIndicatorCodes);
+
+    console.log('📊 Indicator details:', indicatorDetails);
 
     const mapped: OrganizationIndicator[] = [];
     procDetails?.forEach(p => {
@@ -153,6 +163,8 @@ export const ContributorPilotage: React.FC = () => {
       });
     });
 
+    console.log('🗺️ Mapped organization indicators:', mapped);
+
     setOrganizationIndicators(mapped);
     setIndicators(indicatorDetails || []);
   };
@@ -161,6 +173,8 @@ export const ContributorPilotage: React.FC = () => {
   const fetchValues = async (year: number, month: number) => {
     if (!currentOrganization || !organizationIndicators.length) return;
     setLoading(true);
+
+    console.log('📅 Fetching values for:', { year, month, org: currentOrganization, indicatorsCount: organizationIndicators.length });
 
     const { data: userProcs } = await supabase
       .from('user_processes')
@@ -176,6 +190,8 @@ export const ContributorPilotage: React.FC = () => {
       .eq('year', year)
       .eq('month', month)
       .in('process_code', userProcs?.process_codes ?? []);
+
+    console.log('💾 Existing values from DB:', data);
 
     const enriched: IndicatorValue[] = organizationIndicators.map(orgInd => {
       const existing = (data || []).find(
@@ -200,6 +216,8 @@ export const ContributorPilotage: React.FC = () => {
         status: 'draft',
       };
     });
+
+    console.log('🔄 Enriched values:', enriched);
 
     setValues(enriched);
     setLoading(false);
@@ -542,6 +560,9 @@ export const ContributorPilotage: React.FC = () => {
               <p><strong>Indicateurs mappés:</strong> {organizationIndicators.length}</p>
               <p><strong>Processus groupés:</strong> {Object.keys(grouped).length}</p>
               <p><strong>Valeurs chargées:</strong> {values.length}</p>
+              <p><strong>Processus disponibles:</strong> {processes.length}</p>
+              <p><strong>Indicateurs disponibles:</strong> {indicators.length}</p>
+              <p><strong>Valeurs filtrées:</strong> {filtered.length}</p>
             </div>
           </div>
         )}
