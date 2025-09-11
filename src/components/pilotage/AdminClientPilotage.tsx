@@ -285,45 +285,128 @@ export const AdminClientPilotage: React.FC = () => {
     try {
       setLoading(true);
       
-      // Use the new consolidated view with proper metadata
+      console.log('🔍 Fetching consolidated data for:', { organization: currentOrganization, year, level: selectedLevel, entity: selectedEntity });
+      
+      // Use consolidated_indicator_values view for better data
       let query = supabase
-        .from('site_indicator_values_consolidated')
-        .select('*')
+        .from('consolidated_indicator_values')
+        .select(`
+          organization_name,
+          business_line_name,
+          subsidiary_name,
+          indicator_code,
+          year,
+          indicator_name,
+          unit,
+          type,
+          axe,
+          formule,
+          frequence,
+          process_name,
+          janvier,
+          fevrier,
+          mars,
+          avril,
+          mai,
+          juin,
+          juillet,
+          aout,
+          septembre,
+          octobre,
+          novembre,
+          decembre,
+          valeur_totale,
+          valeur_precedente,
+          variation,
+          last_updated,
+          site_names,
+          site_count
+        `)
         .eq('organization_name', currentOrganization)
         .eq('year', year);
 
       // Apply hierarchy filters based on selected level and entity
-      if (selectedLevel === 'organization') {
-        // Show business lines consolidated (business_line_name NOT NULL, subsidiary_name NULL, site_name NULL)
-        query = query
-          .not('business_line_name', 'is', null)
-          .is('subsidiary_name', null)
-          .is('site_name', null);
-      } else if (selectedLevel === 'business_line' && selectedEntity) {
-        // Show subsidiaries within the selected business line (subsidiary_name NOT NULL, site_name NULL)
-        query = query
-          .eq('business_line_name', selectedEntity)
-          .not('subsidiary_name', 'is', null)
-          .is('site_name', null);
+      if (selectedLevel === 'business_line' && selectedEntity) {
+        // Filter by specific business line
+        query = query.eq('business_line_name', selectedEntity);
+        console.log('🏢 Filtering by business line:', selectedEntity);
       } else if (selectedLevel === 'subsidiary' && selectedEntity) {
-        // Show sites within the selected subsidiary (site_name NOT NULL)
-        query = query
-          .eq('subsidiary_name', selectedEntity)
-          .not('site_name', 'is', null);
+        // Filter by specific subsidiary
+        query = query.eq('subsidiary_name', selectedEntity);
+        console.log('🏭 Filtering by subsidiary:', selectedEntity);
       }
 
       const { data, error } = await query
-        .order('process_name')
-        .order('indicator_name');
+        .order('process_name', { ascending: true })
+        .order('indicator_name', { ascending: true });
       
       if (error) throw error;
-      setConsolidatedIndicators(data || []);
+      
+      console.log('📊 Consolidated data fetched:', data?.length || 0, 'indicators');
+      
+      // Transform consolidated data to the expected format
+      const transformedData = transformConsolidatedDataToIndicatorFormat(data || []);
+      setConsolidatedIndicators(transformedData);
+      console.log('🎯 Consolidated indicators set:', transformedData.length, 'indicators');
+      
     } catch (err) {
       console.error('Error fetching consolidated indicators:', err);
       toast.error('Erreur lors du chargement des indicateurs consolidés');
+      setConsolidatedIndicators([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to transform consolidated data to indicator format
+  const transformConsolidatedDataToIndicatorFormat = (consolidatedData: any[]): ConsolidatedIndicator[] => {
+    console.log('🔄 Transforming consolidated data:', consolidatedData.length, 'records');
+    
+    return consolidatedData.map(row => ({
+      id: `${row.organization_name}-${row.indicator_code}-${row.year}`,
+      organization_name: row.organization_name,
+      business_line_name: row.business_line_name,
+      subsidiary_name: row.subsidiary_name,
+      site_name: null, // Consolidated data doesn't have specific site
+      process_code: row.process_name?.replace(/\s+/g, '_').toUpperCase() || 'UNKNOWN',
+      indicator_code: row.indicator_code,
+      year: row.year,
+      month: 12, // Consolidated data is yearly
+      indicator_name: row.indicator_name || row.indicator_code,
+      unit: row.unit || '',
+      axe: row.axe || 'Non défini',
+      type: row.type || 'primaire',
+      formule: row.formule || 'somme',
+      frequence: row.frequence || 'mensuelle',
+      process_name: row.process_name || 'Processus inconnu',
+      process_description: 'Données consolidées',
+      enjeux: 'Enjeux consolidés',
+      normes: 'Normes appliquées',
+      criteres: 'Critères évalués',
+      value_raw: row.valeur_totale || 0,
+      value_consolidated: row.valeur_totale || 0,
+      sites_count: row.site_count || 1,
+      sites_list: row.site_names || [],
+      target_value: 0,
+      previous_year_value: row.valeur_precedente || 0,
+      variation: row.variation || 0,
+      performance: row.valeur_totale && row.valeur_precedente ? 
+        ((row.valeur_totale - row.valeur_precedente) / row.valeur_precedente) * 100 : 0,
+      last_updated: row.last_updated || new Date().toISOString(),
+      // Monthly values for proper display
+      janvier: row.janvier || 0,
+      fevrier: row.fevrier || 0,
+      mars: row.mars || 0,
+      avril: row.avril || 0,
+      mai: row.mai || 0,
+      juin: row.juin || 0,
+      juillet: row.juillet || 0,
+      aout: row.aout || 0,
+      septembre: row.septembre || 0,
+      octobre: row.octobre || 0,
+      novembre: row.novembre || 0,
+      decembre: row.decembre || 0
+    }));
   };
 
   const fetchConsolidatedData = async () => {
@@ -891,10 +974,10 @@ export const AdminClientPilotage: React.FC = () => {
                     </td>
                     
                     {/* Monthly values - using value_consolidated */}
-                    {months.map((month) => (
+                    {months.map((month, monthIndex) => (
                       <td key={month} className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
                         <span className="font-medium text-blue-600">
-                          {indicator[month as keyof ConsolidatedIndicator] && Number(indicator[month as keyof ConsolidatedIndicator]) > 0 ? 
+                          {indicator[month as keyof ConsolidatedIndicator] ? 
                             Number(indicator[month as keyof ConsolidatedIndicator]).toLocaleString() : 
                             '-'
                           }
@@ -904,7 +987,7 @@ export const AdminClientPilotage: React.FC = () => {
                     
                     {/* Target, Variation, Performance */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
-                      {indicator.valeur_cible ? indicator.valeur_cible.toLocaleString() : '-'}
+                      {indicator.target_value ? indicator.target_value.toLocaleString() : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                       <div className={`flex items-center justify-center gap-1 ${
