@@ -115,134 +115,168 @@ export const DashboardTab: React.FC = () => {
     try {
       setLoading(true);
       
-      // Try to refresh the materialized view, but don't fail if it doesn't work
-      try {
-        await supabase.rpc('refresh_dashboard_performance_view');
-      } catch (refreshError) {
-        console.warn('Could not refresh materialized view, using existing data:', refreshError);
-      }
+      console.log('🔍 Fetching consolidated data for:', { organization: currentOrganization, year: filters.year, site: selectedSite });
       
-      // Try main view first, fallback to backup view if needed
-      let data, error;
-      
-      // Build query with site filter if specified
+      // Use consolidated_indicator_values view for better data
       let query = supabase
-        .from('dashboard_performance_view')
-        .select('*')
+        .from('consolidated_indicator_values')
+        .select(`
+          organization_name,
+          business_line_name,
+          subsidiary_name,
+          indicator_code,
+          year,
+          indicator_name,
+          unit,
+          type,
+          axe,
+          formule,
+          frequence,
+          process_name,
+          janvier,
+          fevrier,
+          mars,
+          avril,
+          mai,
+          juin,
+          juillet,
+          aout,
+          septembre,
+          octobre,
+          novembre,
+          decembre,
+          valeur_totale,
+          valeur_precedente,
+          variation,
+          last_updated
+        `)
         .eq('organization_name', currentOrganization)
         .eq('year', filters.year);
       
       if (selectedSite) {
-        // Filter by site if specified
-        query = query.or(`site_name.eq.${selectedSite},site_name.is.null`);
-      }
-      
-      try {
-        const result = await query
-          .order('process_code', { ascending: true })
-          .order('indicator_code', { ascending: true });
-        
-        data = result.data;
-        error = result.error;
-      } catch (mainViewError) {
-        console.warn('Main dashboard view failed, using fallback:', mainViewError);
-        
-        // Use fallback view
-        let fallbackQuery = supabase
-          .from('dashboard_performance_view_fallback')
-          .select('*')
-          .eq('organization_name', currentOrganization)
-          .eq('year', filters.year);
-        
-        if (selectedSite) {
-          fallbackQuery = fallbackQuery.or(`site_name.eq.${selectedSite},site_name.is.null`);
-        }
-        
-        const fallbackResult = await fallbackQuery
-          .order('process_code', { ascending: true })
-          .order('indicator_code', { ascending: true });
-        
-        data = fallbackResult.data;
-        error = fallbackResult.error;
-        
-        if (!error) {
-          toast.error('Utilisation de la vue de secours - Certaines données peuvent être limitées');
-        }
-      }
-
-      if (error) throw error;
-      setDashboardData(data || []);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      
-      // Final fallback: try to get basic indicator data
-      try {
-        let basicQuery = supabase
-          .from('indicator_values')
+        // For site-specific view, we need to get data from indicator_values
+        console.log('📍 Fetching site-specific data for:', selectedSite);
+        const { data: siteData, error: siteError } = await supabase
+          .from('site_indicator_values_view')
           .select(`
             organization_name,
+            business_line_name,
+            subsidiary_name,
+            site_name,
+            year,
             process_code,
             indicator_code,
-            year,
-            month,
             value,
-            site_name,
-            indicators (name, unit, axe, type, formule, frequence),
-            processes (name, description)
+            indicator_name,
+            unit,
+            indicator_type,
+            axe,
+            formule,
+            frequence,
+            process_name
           `)
           .eq('organization_name', currentOrganization)
+          .eq('site_name', selectedSite)
           .eq('year', filters.year);
         
-        if (selectedSite) {
-          basicQuery = basicQuery.eq('site_name', selectedSite);
-        }
+        if (siteError) throw siteError;
         
-        const { data: basicData, error: basicError } = await basicQuery;
-        
-        if (!basicError && basicData) {
-          // Transform basic data to match dashboard format
-          const transformedData = transformBasicDataToDashboardFormat(basicData);
-          setDashboardData(transformedData);
-          toast.warning('Données de base chargées - Vue complète temporairement indisponible');
-        } else {
-          throw new Error('Toutes les sources de données ont échoué');
-        }
-      } catch (finalError) {
-        console.error('All data sources failed:', finalError);
-        toast.error('Erreur lors du chargement des données du tableau de bord');
-        setDashboardData([]);
+        // Transform site data to dashboard format
+        const transformedSiteData = transformSiteDataToDashboardFormat(siteData || []);
+        setDashboardData(transformedSiteData);
+        console.log('📊 Site data transformed:', transformedSiteData.length, 'indicators');
+        return;
       }
+      
+      const { data, error } = await query
+        .order('process_name', { ascending: true })
+        .order('indicator_name', { ascending: true });
+      
+      if (error) throw error;
+      
+      console.log('📊 Consolidated data fetched:', data?.length || 0, 'indicators');
+      
+      // Transform consolidated data to dashboard format
+      const transformedData = transformConsolidatedDataToDashboardFormat(data || []);
+      setDashboardData(transformedData);
+      console.log('🎯 Dashboard data set:', transformedData.length, 'indicators');
+      
+    } catch (error) {
+      console.error('❌ Error fetching consolidated data:', error);
+      toast.error('Erreur lors du chargement des données consolidées');
+      setDashboardData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper function to transform basic data to dashboard format
-  const transformBasicDataToDashboardFormat = (basicData: any[]) => {
+  // Helper function to transform consolidated data to dashboard format
+  const transformConsolidatedDataToDashboardFormat = (consolidatedData: any[]): DashboardData[] => {
+    console.log('🔄 Transforming consolidated data:', consolidatedData.length, 'records');
+    
+    return consolidatedData.map(row => ({
+      organization_name: row.organization_name,
+      process_code: row.process_name?.replace(/\s+/g, '_').toUpperCase() || 'UNKNOWN',
+      indicator_code: row.indicator_code,
+      year: row.year,
+      axe: row.axe || 'Non défini',
+      enjeux: 'Données consolidées',
+      normes: 'Standards appliqués',
+      criteres: 'Critères évalués',
+      processus: row.process_name || 'Processus inconnu',
+      indicateur: row.indicator_name || row.indicator_code,
+      unite: row.unit || '',
+      frequence: row.frequence || 'mensuelle',
+      type: row.type || 'primaire',
+      formule: row.formule || 'somme',
+      janvier: row.janvier || 0,
+      fevrier: row.fevrier || 0,
+      mars: row.mars || 0,
+      avril: row.avril || 0,
+      mai: row.mai || 0,
+      juin: row.juin || 0,
+      juillet: row.juillet || 0,
+      aout: row.aout || 0,
+      septembre: row.septembre || 0,
+      octobre: row.octobre || 0,
+      novembre: row.novembre || 0,
+      decembre: row.decembre || 0,
+      valeur_cible: 0,
+      variation: row.variation || 0,
+      performance: row.valeur_totale && row.valeur_precedente ? 
+        ((row.valeur_totale - row.valeur_precedente) / row.valeur_precedente) * 100 : 0,
+      valeur_moyenne: row.valeur_totale ? row.valeur_totale / 12 : 0,
+      last_updated: row.last_updated || new Date().toISOString()
+    }));
+  };
+
+  // Helper function to transform site data to dashboard format
+  const transformSiteDataToDashboardFormat = (siteData: any[]): DashboardData[] => {
+    console.log('🔄 Transforming site data:', siteData.length, 'records');
+    
     const grouped = basicData.reduce((acc, row) => {
-      const key = `${row.organization_name}-${row.process_code}-${row.indicator_code}-${row.year}`;
+      const key = `${row.organization_name}-${row.process_code}-${row.indicator_code}`;
       if (!acc[key]) {
         acc[key] = {
           organization_name: row.organization_name,
           process_code: row.process_code,
           indicator_code: row.indicator_code,
           year: row.year,
-          axe: row.indicators?.axe || 'Non défini',
-          enjeux: 'Données limitées',
-          normes: 'Données limitées',
-          criteres: 'Données limitées',
-          processus: row.processes?.name || 'Processus inconnu',
-          indicateur: row.indicators?.name || row.indicator_code,
-          unite: row.indicators?.unit || '',
-          frequence: row.indicators?.frequence || 'mensuelle',
-          type: row.indicators?.type || 'primaire',
-          formule: row.indicators?.formule || 'somme',
+          axe: row.axe || 'Non défini',
+          enjeux: 'Données site',
+          normes: 'Standards site',
+          criteres: 'Critères site',
+          processus: row.process_name || 'Processus inconnu',
+          indicateur: row.indicator_name || row.indicator_code,
+          unite: row.unit || '',
+          frequence: row.frequence || 'mensuelle',
+          type: row.indicator_type || 'primaire',
+          formule: row.formule || 'somme',
           janvier: 0, fevrier: 0, mars: 0, avril: 0,
           mai: 0, juin: 0, juillet: 0, aout: 0,
           septembre: 0, octobre: 0, novembre: 0, decembre: 0,
-          valeur_totale: 0,
-          valeur_precedente: 0,
           valeur_cible: 0,
+          valeur_precedente: 0,
           variation: 0,
           performance: 0,
           valeur_moyenne: 0,
@@ -250,15 +284,9 @@ export const DashboardTab: React.FC = () => {
         };
       }
       
-      // Add monthly value
-      const monthNames = [
-        'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
-        'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
-      ];
-      const monthName = monthNames[row.month - 1];
-      if (monthName && row.value !== null) {
-        acc[key][monthName] = row.value;
-        acc[key].valeur_totale += row.value;
+      // Add value (assuming it's current month or aggregate)
+      if (row.value !== null) {
+        acc[key].valeur_totale = row.value;
       }
       
       return acc;
