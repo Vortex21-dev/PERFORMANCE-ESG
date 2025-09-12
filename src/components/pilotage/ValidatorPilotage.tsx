@@ -199,11 +199,6 @@ export const ValidatorPilotage: React.FC = () => {
           validated_by: user?.email,
           validated_at: new Date().toISOString(),
           comment: validationComment || null,
-          business_line_key: value.business_line_name || '',
-          subsidiary_key: value.subsidiary_name || '',
-          site_key: value.site_name || '',
-          year: value.year || new Date().getFullYear(),
-          month: value.month || new Date().getMonth() + 1,
           updated_at: new Date().toISOString(),
         })
         .eq('id', value.id);
